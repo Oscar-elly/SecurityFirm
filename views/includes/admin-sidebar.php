@@ -111,8 +111,8 @@
                 <span class="nav-section-title">Communication</span>
             </li>
             
-            <li class="<?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'active' : ''; ?>">
-                <a href="messages.php">
+            <li class="<?php echo basename($_SERVER['PHP_SELF']) === 'shared/messages.php' ? 'active' : ''; ?>">
+                <a href="../shared/messages.php">
                     <i data-lucide="message-square"></i>
                     <span>Messages</span>
                 </a>

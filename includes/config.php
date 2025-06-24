@@ -9,7 +9,7 @@ define('DB_NAME', 'security_management');
 
 // Application settings
 define('SITE_NAME', 'SecureConnect Kenya');
-define('SITE_URL', 'http://localhost:8080/SecurityFirm');
+define('SITE_URL', 'http://localhost:80/SecurityFirm');
 define('ADMIN_EMAIL', 'admin@secureconnect.co.ke');
 
 // Session settings

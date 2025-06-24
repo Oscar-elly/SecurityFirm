@@ -77,7 +77,7 @@
             <div class="dropdown-menu">
                 <div class="dropdown-header">
                     <h3>Messages</h3>
-                    <a href="messages.php">View All</a>
+                    <a href="../shared/messages.php">View All</a>
                 </div>
                 
                 <div class="dropdown-body">
@@ -87,7 +87,7 @@
                     if (!empty($messages)):
                         foreach ($messages as $message):
                     ?>
-                    <a href="messages.php?id=<?php echo $message['id']; ?>" class="message-item <?php echo $message['is_read'] ? '' : 'unread'; ?>">
+                    <a href="../shared/messages.php?id=<?php echo $message['id']; ?>" class="message-item <?php echo $message['is_read'] ? '' : 'unread'; ?>">
                         <div class="message-avatar">
                             <?php echo getInitials($message['sender_name']); ?>
                         </div>

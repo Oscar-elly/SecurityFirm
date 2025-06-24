@@ -10,29 +10,69 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Add simple validation before form submission
-loginForm.addEventListener('submit', function (event) {
-  event.preventDefault();
-
-  const formData = new FormData(loginForm);
-
-  fetch('login.php', {
-    method: 'POST',
-    body: formData
-  })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success && data.redirect) {
-        window.location.href = data.redirect;
-      } else {
-        alert(data.error || 'Login failed');
-      }
-    })
-    .catch(error => {
-      console.error('Login error:', error);
-      alert('Something went wrong. Please try again.');
+    loginForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        
+        // Clear previous errors
+        document.querySelectorAll('.field-error').forEach(el => el.remove());
+        
+        // Validate inputs
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+        let isValid = true;
+        
+        if (!email) {
+            showError(emailInput, 'Email is required');
+            isValid = false;
+        } else if (!isValidEmail(email)) {
+            showError(emailInput, 'Please enter a valid email');
+            isValid = false;
+        }
+        
+        if (!password) {
+            showError(passwordInput, 'Password is required');
+            isValid = false;
+        }
+        
+        if (!isValid) return;
+        
+        // Show loading state
+        loginButton.disabled = true;
+        loginButton.textContent = 'Logging in...';
+        
+        const formData = new FormData(loginForm);
+        
+        fetch('login.php', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || 'Login failed');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.redirect) {
+                window.location.href = data.redirect;
+            } else {
+                throw new Error(data.error || 'Login failed');
+            }
+        })
+        .catch(error => {
+            console.error('Login error:', error);
+            alert(error.message || 'Something went wrong. Please try again.');
+        })
+        .finally(() => {
+            loginButton.disabled = false;
+            loginButton.textContent = 'Login';
+        });
     });
-});
-
     
     // Helper function to validate email format
     function isValidEmail(email) {
