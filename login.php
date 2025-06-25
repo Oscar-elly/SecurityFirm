@@ -43,7 +43,7 @@ if ($conn->connect_error) {
 $conn->set_charset("utf8mb4");
 
 // User lookup
-$stmt = $conn->prepare("SELECT id, role, password, name FROM users WHERE email = ?");
+$stmt = $conn->prepare("SELECT id, role, password, name, status FROM users WHERE email = ?");
 if (!$stmt) {
     http_response_code(500);
     exit(json_encode(['error' => 'Database query preparation failed']));
@@ -79,6 +79,12 @@ if (!password_verify($password, $user['password'])) {
     
     http_response_code(401);
     exit(json_encode(['error' => 'Invalid email or password']));
+}
+
+// Check if user account is active
+if ($user['status'] !== 'active') {
+    http_response_code(403);
+    exit(json_encode(['error' => 'Account is deactivated. Please contact administrator.']));
 }
 
 // Login successful - set session
