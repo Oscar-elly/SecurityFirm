@@ -4,47 +4,57 @@ require_once '../../includes/config.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/db.php';
 
-requireRole('admin');
+requireRole('organization');
 
+$organizationId = $_SESSION['organization_id'];
+
+// Monthly incident trends for organization
 $incidentTrends = executeQuery("
     SELECT DATE_FORMAT(incident_time, '%Y-%m') as month, 
            COUNT(*) as count,
            severity
     FROM incidents 
-    WHERE incident_time >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    WHERE organization_id = ? AND incident_time >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
     GROUP BY DATE_FORMAT(incident_time, '%Y-%m'), severity
     ORDER BY month DESC
-");
+", [$organizationId]);
 
+// Guard performance analytics for organization
 $guardPerformance = executeQuery("
     SELECT AVG(overall_rating) as avg_rating,
            COUNT(*) as total_evaluations,
            MONTH(evaluation_date) as month
-    FROM performance_evaluations 
-    WHERE evaluation_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    FROM performance_evaluations pe
+    JOIN guards g ON pe.guard_id = g.id
+    WHERE g.organization_id = ? AND evaluation_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
     GROUP BY MONTH(evaluation_date)
     ORDER BY month
-");
+", [$organizationId]);
 
+// Attendance analytics for organization
 $attendanceStats = executeQuery("
     SELECT status, COUNT(*) as count,
-           ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM attendance)), 2) as percentage
-    FROM attendance 
-    WHERE check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+           ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM attendance a JOIN duty_assignments da ON a.duty_assignment_id = da.id JOIN guards g ON da.guard_id = g.id WHERE g.organization_id = ?)), 2) as percentage
+    FROM attendance a
+    JOIN duty_assignments da ON a.duty_assignment_id = da.id
+    JOIN guards g ON da.guard_id = g.id
+    WHERE g.organization_id = ? AND check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     GROUP BY status
-");
+", [$organizationId, $organizationId]);
 
+// Location incident distribution for organization
 $locationIncidents = executeQuery("
-    SELECT l.name as location_name, o.name as organization_name,
+    SELECT l.name as location_name,
            COUNT(i.id) as incident_count
     FROM locations l
-    JOIN organizations o ON l.organization_id = o.id
     LEFT JOIN incidents i ON l.id = i.location_id
-    GROUP BY l.id, l.name, o.name
+    WHERE l.organization_id = ?
+    GROUP BY l.id, l.name
     ORDER BY incident_count DESC
     LIMIT 10
-");
+", [$organizationId]);
 
+// Response time analytics for organization
 $responseTimeData = executeQuery("
     SELECT severity,
            AVG(TIMESTAMPDIFF(HOUR, created_at, 
@@ -54,18 +64,20 @@ $responseTimeData = executeQuery("
                    ELSE NOW()
                END)) as avg_response_hours
     FROM incidents 
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    WHERE organization_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     GROUP BY severity
-");
+", [$organizationId]);
 
+// Guard utilization for organization
 $guardUtilization = executeQuery("
     SELECT COUNT(DISTINCT da.guard_id) as active_guards,
-           (SELECT COUNT(*) FROM guards) as total_guards,
-           ROUND((COUNT(DISTINCT da.guard_id) * 100.0 / (SELECT COUNT(*) FROM guards)), 2) as utilization_rate
+           (SELECT COUNT(*) FROM guards WHERE organization_id = ?) as total_guards,
+           ROUND((COUNT(DISTINCT da.guard_id) * 100.0 / (SELECT COUNT(*) FROM guards WHERE organization_id = ?)), 2) as utilization_rate
     FROM duty_assignments da
-    WHERE da.status = 'active' 
+    JOIN guards g ON da.guard_id = g.id
+    WHERE g.organization_id = ? AND da.status = 'active' 
     AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())
-");
+", [$organizationId, $organizationId, $organizationId]);
 
 $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 0, 'utilization_rate' => 0];
 ?>
@@ -73,28 +85,28 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analytics Dashboard | <?php echo SITE_NAME; ?></title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../../assets/css/styles.css">
-    <link rel="stylesheet" href="../../assets/css/dashboard.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Security Analytics | <?php echo SITE_NAME; ?></title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../assets/css/styles.css" />
+    <link rel="stylesheet" href="../../assets/css/dashboard.css" />
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
-        <?php include '../includes/admin-sidebar.php'; ?>
-        
+        <?php include '../includes/organization-sidebar.php'; ?>
+
         <main class="main-content">
             <?php include '../includes/top-nav.php'; ?>
-            
+
             <div class="dashboard-content">
                 <div class="dashboard-header">
-                    <h1>Analytics Dashboard</h1>
-                    <p>Comprehensive security analytics and insights</p>
+                    <h1>Security Analytics</h1>
+                    <p>Comprehensive security analytics and insights for your organization</p>
                 </div>
-                
+
                 <!-- Key Metrics -->
                 <div class="stats-cards">
                     <div class="card stat-card">
@@ -106,7 +118,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                             <p>Guard Utilization</p>
                         </div>
                     </div>
-                    
+
                     <div class="card stat-card">
                         <div class="stat-icon">
                             <i data-lucide="trending-up"></i>
@@ -116,7 +128,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                             <p>Avg Performance</p>
                         </div>
                     </div>
-                    
+
                     <div class="card stat-card">
                         <div class="stat-icon">
                             <i data-lucide="clock"></i>
@@ -126,7 +138,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                             <p>Avg Response Time</p>
                         </div>
                     </div>
-                    
+
                     <div class="card stat-card">
                         <div class="stat-icon">
                             <i data-lucide="check-circle"></i>
@@ -134,12 +146,10 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                         <div class="stat-details">
                             <h3><?php 
                             $presentRate = 0;
-                            if (is_array($attendanceStats) && isset($attendanceStats[0]) && is_array($attendanceStats[0])) {
-                                foreach ($attendanceStats as $stat) {
-                                    if (isset($stat['status']) && $stat['status'] === 'present') {
-                                        $presentRate = $stat['percentage'];
-                                        break;
-                                    }
+                            foreach ($attendanceStats as $stat) {
+                                if ($stat['status'] === 'present') {
+                                    $presentRate = $stat['percentage'];
+                                    break;
                                 }
                             }
                             echo $presentRate;
@@ -148,7 +158,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Charts Row 1 -->
                 <div class="charts-row">
                     <div class="card chart-card">
@@ -159,7 +169,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                             <canvas id="incidentTrendsChart"></canvas>
                         </div>
                     </div>
-                    
+
                     <div class="card chart-card">
                         <div class="card-header">
                             <h2>Attendance Distribution</h2>
@@ -169,7 +179,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Charts Row 2 -->
                 <div class="charts-row">
                     <div class="card chart-card">
@@ -180,7 +190,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                             <canvas id="performanceChart"></canvas>
                         </div>
                     </div>
-                    
+
                     <div class="card chart-card">
                         <div class="card-header">
                             <h2>Response Time by Severity</h2>
@@ -190,7 +200,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Location Incidents Table -->
                 <div class="card">
                     <div class="card-header">
@@ -202,35 +212,31 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                                 <thead>
                                     <tr>
                                         <th>Location</th>
-                                        <th>Organization</th>
                                         <th>Incident Count</th>
                                         <th>Risk Level</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if (is_array($locationIncidents)) : ?>
-                                        <?php foreach ($locationIncidents as $location): ?>
-                                        <tr>
-                                            <td><?php echo isset($location['location_name']) ? sanitize($location['location_name']) : ''; ?></td>
-                                            <td><?php echo isset($location['organization_name']) ? sanitize($location['organization_name']) : ''; ?></td>
-                                            <td><?php echo isset($location['incident_count']) ? $location['incident_count'] : 0; ?></td>
-                                            <td>
-                                                <?php 
-                                                $riskLevel = 'Low';
-                                                $riskClass = 'success';
-                                                if (isset($location['incident_count']) && $location['incident_count'] > 10) {
-                                                    $riskLevel = 'High';
-                                                    $riskClass = 'danger';
-                                                } elseif (isset($location['incident_count']) && $location['incident_count'] > 5) {
-                                                    $riskLevel = 'Medium';
-                                                    $riskClass = 'warning';
-                                                }
-                                                ?>
-                                                <span class="badge badge-<?php echo $riskClass; ?>"><?php echo $riskLevel; ?></span>
-                                            </td>
-                                        </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
+                                    <?php foreach ($locationIncidents as $location): ?>
+                                    <tr>
+                                        <td><?php echo sanitize($location['location_name']); ?></td>
+                                        <td><?php echo $location['incident_count']; ?></td>
+                                        <td>
+                                            <?php 
+                                            $riskLevel = 'Low';
+                                            $riskClass = 'success';
+                                            if ($location['incident_count'] > 10) {
+                                                $riskLevel = 'High';
+                                                $riskClass = 'danger';
+                                            } elseif ($location['incident_count'] > 5) {
+                                                $riskLevel = 'Medium';
+                                                $riskClass = 'warning';
+                                            }
+                                            ?>
+                                            <span class="badge badge-<?php echo $riskClass; ?>"><?php echo $riskLevel; ?></span>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -266,20 +272,9 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
 
     <script>
         lucide.createIcons();
-
-        // Helper function to safely parse JSON data
-        function safeParse(json) {
-            try {
-                return JSON.parse(json);
-            } catch (e) {
-                console.error('JSON parse error:', e);
-                return [];
-            }
-        }
-
+        
         // Incident Trends Chart
-        const incidentDataRaw = '<?php echo json_encode($incidentTrends); ?>';
-        const incidentData = safeParse(incidentDataRaw);
+        const incidentData = <?php echo json_encode($incidentTrends); ?>;
         const incidentCtx = document.getElementById('incidentTrendsChart').getContext('2d');
         new Chart(incidentCtx, {
             type: 'line',
@@ -306,10 +301,9 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                 }
             }
         });
-
+        
         // Attendance Chart
-        const attendanceDataRaw = '<?php echo json_encode($attendanceStats); ?>';
-        const attendanceData = safeParse(attendanceDataRaw);
+        const attendanceData = <?php echo json_encode($attendanceStats); ?>;
         const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
         new Chart(attendanceCtx, {
             type: 'doughnut',
@@ -325,10 +319,9 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                 maintainAspectRatio: false
             }
         });
-
+        
         // Performance Chart
-        const performanceDataRaw = '<?php echo json_encode($guardPerformance); ?>';
-        const performanceData = safeParse(performanceDataRaw);
+        const performanceData = <?php echo json_encode($guardPerformance); ?>;
         const performanceCtx = document.getElementById('performanceChart').getContext('2d');
         new Chart(performanceCtx, {
             type: 'bar',
@@ -351,10 +344,9 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                 }
             }
         });
-
+        
         // Response Time Chart
-        const responseDataRaw = '<?php echo json_encode($responseTimeData); ?>';
-        const responseData = safeParse(responseDataRaw);
+        const responseData = <?php echo json_encode($responseTimeData); ?>;
         const responseCtx = document.getElementById('responseTimeChart').getContext('2d');
         new Chart(responseCtx, {
             type: 'bar',
@@ -377,5 +369,3 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
             }
         });
     </script>
-</body>
-</html>

@@ -617,26 +617,3 @@ $users = executeQuery($usersQuery, [$userId]);
     </script>
 </body>
 </html>
-
-<?php
-function getInitials($name) {
-    $words = explode(' ', $name);
-    $initials = '';
-    foreach ($words as $word) {
-        $initials .= strtoupper(substr($word, 0, 1));
-    }
-    return substr($initials, 0, 2);
-}
-
-function getTimeAgo($datetime) {
-    $time = strtotime($datetime);
-    $now = time();
-    $diff = $now - $time;
-    
-    if ($diff < 60) return 'just now';
-    if ($diff < 3600) return floor($diff / 60) . ' minutes ago';
-    if ($diff < 86400) return floor($diff / 3600) . ' hours ago';
-    if ($diff < 604800) return floor($diff / 86400) . ' days ago';
-    return date('M j, Y', $time);
-}
-?>

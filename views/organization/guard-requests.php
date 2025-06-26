@@ -392,31 +392,3 @@ $requests = executeQuery($query, [$organization['id']]);
     </script>
 </body>
 </html>
-
-<?php
-function formatTime($time) {
-    return date('h:i A', strtotime($time));
-}
-
-function getRequestStatusClass($status) {
-    switch ($status) {
-        case 'pending': return 'warning';
-        case 'approved': return 'success';
-        case 'rejected': return 'danger';
-        case 'completed': return 'secondary';
-        default: return 'secondary';
-    }
-}
-
-function getTimeAgo($datetime) {
-    $time = strtotime($datetime);
-    $now = time();
-    $diff = $now - $time;
-    
-    if ($diff < 60) return 'just now';
-    if ($diff < 3600) return floor($diff / 60) . ' minutes ago';
-    if ($diff < 86400) return floor($diff / 3600) . ' hours ago';
-    if ($diff < 604800) return floor($diff / 86400) . ' days ago';
-    return date('M j, Y', $time);
-}
-?>

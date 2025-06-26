@@ -230,7 +230,7 @@ function getTimeAgo($datetime) {
             <div class="dropdown-menu">
                 <div class="dropdown-header">
                     <h3>Notifications</h3>
-                    <a href="../admin/notifications.php">View All</a>
+                    <a href="../shared/notifications.php">View All</a>
                 </div>
                 
                 <div class="dropdown-body">
@@ -240,7 +240,7 @@ function getTimeAgo($datetime) {
                     if (!empty($notifications)):
                         foreach ($notifications as $notification):
                     ?>
-                    <a href="<?php echo $notification['link'] ? '../' . $notification['link'] : '#'; ?>" class="notification-item <?php echo $notification['is_read'] ? '' : 'unread'; ?>">
+                    <a href="<?php echo $notification['link'] ? '/SecurityFirm/' . ltrim($notification['link'], '/') : '#'; ?>" class="notification-item <?php echo $notification['is_read'] ? '' : 'unread'; ?>">
                         <div class="notification-icon">
                             <i data-lucide="<?php echo getNotificationIcon($notification['type']); ?>"></i>
                         </div>
@@ -314,7 +314,7 @@ function getTimeAgo($datetime) {
             </button>
             
             <div class="dropdown-menu">
-                <a href="profile.php" class="dropdown-item">
+                <a href="settings.php#profile-tab" class="dropdown-item">
                     <i data-lucide="user"></i>
                     <span>Profile</span>
                 </a>

@@ -437,29 +437,3 @@ $readNotifications = array_filter($notifications, function($n) { return $n['is_r
     </script>
 </body>
 </html>
-
-<?php
-function getNotificationIcon($type) {
-    switch ($type) {
-        case 'incident': return 'alert-triangle';
-        case 'assignment': return 'calendar';
-        case 'message': return 'message-square';
-        case 'system': return 'settings';
-        case 'request': return 'file-text';
-        case 'attendance': return 'clock';
-        default: return 'bell';
-    }
-}
-
-function getTimeAgo($datetime) {
-    $time = strtotime($datetime);
-    $now = time();
-    $diff = $now - $time;
-    
-    if ($diff < 60) return 'just now';
-    if ($diff < 3600) return floor($diff / 60) . ' minutes ago';
-    if ($diff < 86400) return floor($diff / 3600) . ' hours ago';
-    if ($diff < 604800) return floor($diff / 86400) . ' days ago';
-    return date('M j, Y', $time);
-}
-?>

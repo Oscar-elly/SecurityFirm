@@ -122,10 +122,6 @@ $requests = executeQuery($query);
                                         </td>
                                         <td><?php echo formatDate($request['created_at']); ?></td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline" onclick="viewRequest(<?php echo $request['id']; ?>)">
-                                                <i data-lucide="eye"></i>
-                                            </button>
-                                            
                                             <?php if ($request['status'] === 'pending'): ?>
                                             <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to approve this request?')">
                                                 <input type="hidden" name="action" value="approve">

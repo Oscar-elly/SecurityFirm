@@ -34,24 +34,36 @@ $pdf->Ln(10);
 $pdf->SetFont('Arial', 'B', 14);
 $pdf->Cell(0, 10, 'Incidents by Severity:', 0, 1);
 $pdf->SetFont('Arial', '', 12);
-foreach ($incidentSeverities as $row) {
-    $pdf->Cell(0, 10, ucfirst($row['severity']) . ': ' . $row['count'], 0, 1);
+if (!empty($incidentSeverities)) {
+    foreach ($incidentSeverities as $row) {
+        $pdf->Cell(0, 10, ucfirst($row['severity']) . ': ' . $row['count'], 0, 1);
+    }
+} else {
+    $pdf->Cell(0, 10, 'No data available', 0, 1);
 }
 $pdf->Ln(10);
 
 $pdf->SetFont('Arial', 'B', 14);
 $pdf->Cell(0, 10, 'Attendance Summary:', 0, 1);
 $pdf->SetFont('Arial', '', 12);
-foreach ($attendanceSummary as $row) {
-    $pdf->Cell(0, 10, ucfirst($row['status']) . ': ' . $row['count'], 0, 1);
+if (!empty($attendanceSummary)) {
+    foreach ($attendanceSummary as $row) {
+        $pdf->Cell(0, 10, ucfirst($row['status']) . ': ' . $row['count'], 0, 1);
+    }
+} else {
+    $pdf->Cell(0, 10, 'No data available', 0, 1);
 }
 $pdf->Ln(10);
 
 $pdf->SetFont('Arial', 'B', 14);
 $pdf->Cell(0, 10, 'Duty Assignments Summary:', 0, 1);
 $pdf->SetFont('Arial', '', 12);
-foreach ($dutyAssignmentsSummary as $row) {
-    $pdf->Cell(0, 10, ucfirst($row['status']) . ': ' . $row['count'], 0, 1);
+if (!empty($dutyAssignmentsSummary)) {
+    foreach ($dutyAssignmentsSummary as $row) {
+        $pdf->Cell(0, 10, ucfirst($row['status']) . ': ' . $row['count'], 0, 1);
+    }
+} else {
+    $pdf->Cell(0, 10, 'No data available', 0, 1);
 }
 
 $pdf->Output('D', 'reports_summary.pdf');

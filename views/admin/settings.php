@@ -6,7 +6,6 @@ require_once '../../includes/db.php';
 
 requireRole('admin');
 
-// Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
@@ -14,6 +13,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $name = sanitize($_POST['name']);
                 $email = sanitize($_POST['email']);
                 $phone = sanitize($_POST['phone']);
+
+                // Handle profile picture upload if any
+                if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
+                    $uploadDir = '../../uploads/profile_pictures/';
+                    if (!is_dir($uploadDir)) {
+                        mkdir($uploadDir, 0755, true);
+                    }
+                    $fileTmpPath = $_FILES['profile_picture']['tmp_name'];
+                    $fileName = basename($_FILES['profile_picture']['name']);
+                    $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+                    $allowedExts = ['jpg', 'jpeg', 'png', 'gif'];
+                    if (in_array($fileExt, $allowedExts)) {
+                        $newFileName = 'user_' . $_SESSION['user_id'] . '.' . $fileExt;
+                        $destPath = $uploadDir . $newFileName;
+                        if (move_uploaded_file($fileTmpPath, $destPath)) {
+                            // Update profile picture path in DB
+                            $queryPic = "UPDATE users SET profile_picture = ? WHERE id = ?";
+                            executeQuery($queryPic, [$newFileName, $_SESSION['user_id']]);
+                        } else {
+                            $_SESSION['error'] = 'Failed to upload profile picture.';
+                        }
+                    } else {
+                        $_SESSION['error'] = 'Invalid file type for profile picture.';
+                    }
+                }
                 
                 $query = "UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ?";
                 $result = executeQuery($query, [$name, $email, $phone, $_SESSION['user_id']]);
@@ -129,29 +153,41 @@ $systemStats = [
                             <h2>Profile Information</h2>
                         </div>
                         <div class="card-body">
-                            <form method="POST">
+                            <form method="POST" enctype="multipart/form-data">
                                 <input type="hidden" name="action" value="update_profile">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="name">Full Name</label>
-                                        <input type="text" id="name" name="name" value="<?php echo sanitize($currentUser['name']); ?>" required>
+                                <div class="form-row" style="align-items: center;">
+                                    <div class="form-group" style="flex: 0 0 150px; text-align: center;">
+                                        <?php if (!empty($currentUser['profile_picture']) && file_exists('../../uploads/profile_pictures/' . $currentUser['profile_picture'])): ?>
+                                            <img src="../../uploads/profile_pictures/<?php echo sanitize($currentUser['profile_picture']); ?>" alt="Profile Picture" class="profile-picture" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color); margin-bottom: 1rem;">
+                                        <?php else: ?>
+                                            <img src="../../assets/images/default-profile.png" alt="Profile Picture" class="profile-picture" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color); margin-bottom: 1rem;">
+                                        <?php endif; ?>
+                                        <input type="file" name="profile_picture" accept="image/*" />
                                     </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="email">Email Address</label>
-                                        <input type="email" id="email" name="email" value="<?php echo sanitize($currentUser['email']); ?>" required>
-                                    </div>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="phone">Phone Number</label>
-                                        <input type="tel" id="phone" name="phone" value="<?php echo sanitize($currentUser['phone']); ?>">
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="role">Role</label>
-                                        <input type="text" id="role" value="<?php echo ucfirst($currentUser['role']); ?>" readonly>
+                                    <div style="flex: 1;">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="name">Full Name</label>
+                                                <input type="text" id="name" name="name" value="<?php echo sanitize($currentUser['name']); ?>" required>
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="email">Email Address</label>
+                                                <input type="email" id="email" name="email" value="<?php echo sanitize($currentUser['email']); ?>" required>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="phone">Phone Number</label>
+                                                <input type="tel" id="phone" name="phone" value="<?php echo sanitize($currentUser['phone']); ?>">
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="role">Role</label>
+                                                <input type="text" id="role" value="<?php echo ucfirst($currentUser['role']); ?>" readonly>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -160,6 +196,12 @@ $systemStats = [
                                         <i data-lucide="save"></i> Update Profile
                                     </button>
                                 </div>
+                            </form>
+                            <form method="POST" style="margin-top: 1rem;">
+                                <input type="hidden" name="toggle_theme" value="1" />
+                                <button type="submit" class="btn btn-secondary">
+                                    Switch to <?php echo ($_SESSION['theme_mode'] ?? 'light') === 'light' ? 'Dark' : 'Light'; ?> Mode
+                                </button>
                             </form>
                         </div>
                     </div>
