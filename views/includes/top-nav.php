@@ -1,3 +1,200 @@
+<?php
+// Helper functions for top navigation
+
+/**
+ * Get the title of the current page
+ * 
+ * @return string Page title
+ */
+function getPageTitle() {
+    $page = basename($_SERVER['PHP_SELF'], '.php');
+    $page = str_replace('-', ' ', $page);
+    return ucwords($page);
+}
+
+/**
+ * Get unread notifications count for current user
+ * 
+ * @return int Count of unread notifications
+ */
+function getUnreadNotificationsCount() {
+    global $conn;
+    
+    $userId = $_SESSION['user_id'];
+    $query = "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";
+    
+    $stmt = $conn->prepare($query);
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result && $row = $result->fetch_assoc()) {
+            return $row['count'];
+        }
+    }
+    
+    return 0;
+}
+
+/**
+ * Get recent notifications for current user
+ * 
+ * @param int $limit Number of notifications to get
+ * @return array Notifications
+ */
+function getRecentNotifications($limit = 5) {
+    global $conn;
+    
+    $userId = $_SESSION['user_id'];
+    $query = "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?";
+    
+    $stmt = $conn->prepare($query);
+    if ($stmt) {
+        $stmt->bind_param("ii", $userId, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        $notifications = [];
+        while ($row = $result->fetch_assoc()) {
+            $notifications[] = $row;
+        }
+        
+        return $notifications;
+    }
+    
+    return [];
+}
+
+/**
+ * Get icon for notification type
+ * 
+ * @param string $type Notification type
+ * @return string Icon name
+ */
+function getNotificationIcon($type) {
+    switch ($type) {
+        case 'incident':
+            return 'alert-triangle';
+        case 'assignment':
+            return 'calendar';
+        case 'message':
+            return 'message-square';
+        case 'system':
+            return 'info';
+        case 'attendance':
+            return 'clock';
+        case 'request':
+            return 'file-text';
+        default:
+            return 'bell';
+    }
+}
+
+/**
+ * Get unread messages count for current user
+ * 
+ * @return int Count of unread messages
+ */
+function getUnreadMessagesCount() {
+    global $conn;
+    
+    $userId = $_SESSION['user_id'];
+    $query = "SELECT COUNT(*) as count FROM messages WHERE receiver_id = ? AND is_read = 0";
+    
+    $stmt = $conn->prepare($query);
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result && $row = $result->fetch_assoc()) {
+            return $row['count'];
+        }
+    }
+    
+    return 0;
+}
+
+/**
+ * Get recent messages for current user
+ * 
+ * @param int $limit Number of messages to get
+ * @return array Messages with sender information
+ */
+function getRecentMessages($limit = 5) {
+    global $conn;
+    
+    $userId = $_SESSION['user_id'];
+    $query = "SELECT m.*, u.name as sender_name 
+              FROM messages m 
+              JOIN users u ON m.sender_id = u.id 
+              WHERE m.receiver_id = ? 
+              ORDER BY m.created_at DESC 
+              LIMIT ?";
+    
+    $stmt = $conn->prepare($query);
+    if ($stmt) {
+        $stmt->bind_param("ii", $userId, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        $messages = [];
+        while ($row = $result->fetch_assoc()) {
+            $messages[] = $row;
+        }
+        
+        return $messages;
+    }
+    
+    return [];
+}
+
+/**
+ * Get initials from name
+ * 
+ * @param string $name Full name
+ * @return string Initials
+ */
+function getInitials($name) {
+    $words = explode(' ', $name);
+    $initials = '';
+    
+    foreach ($words as $word) {
+        $initials .= strtoupper(substr($word, 0, 1));
+    }
+    
+    return substr($initials, 0, 2);
+}
+
+/**
+ * Get time ago from datetime
+ * 
+ * @param string $datetime Datetime string
+ * @return string Time ago
+ */
+function getTimeAgo($datetime) {
+    $time = strtotime($datetime);
+    $now = time();
+    $diff = $now - $time;
+    
+    if ($diff < 60) {
+        return 'Just now';
+    } elseif ($diff < 3600) {
+        $mins = floor($diff / 60);
+        return $mins . ' min' . ($mins > 1 ? 's' : '') . ' ago';
+    } elseif ($diff < 86400) {
+        $hours = floor($diff / 3600);
+        return $hours . ' hour' . ($hours > 1 ? 's' : '') . ' ago';
+    } elseif ($diff < 604800) {
+        $days = floor($diff / 86400);
+        return $days . ' day' . ($days > 1 ? 's' : '') . ' ago';
+    } else {
+        return date('M j, Y', $time);
+    }
+}
+?>
+
 <header class="top-nav">
     <div class="left-section">
         <button id="mobile-sidebar-toggle" class="mobile-sidebar-toggle">
@@ -33,7 +230,7 @@
             <div class="dropdown-menu">
                 <div class="dropdown-header">
                     <h3>Notifications</h3>
-                    <a href="notifications.php">View All</a>
+                    <a href="../admin/notifications.php">View All</a>
                 </div>
                 
                 <div class="dropdown-body">
@@ -43,7 +240,7 @@
                     if (!empty($notifications)):
                         foreach ($notifications as $notification):
                     ?>
-                    <a href="<?php echo $notification['link']; ?>" class="notification-item <?php echo $notification['is_read'] ? '' : 'unread'; ?>">
+                    <a href="<?php echo $notification['link'] ? '../' . $notification['link'] : '#'; ?>" class="notification-item <?php echo $notification['is_read'] ? '' : 'unread'; ?>">
                         <div class="notification-icon">
                             <i data-lucide="<?php echo getNotificationIcon($notification['type']); ?>"></i>
                         </div>
@@ -137,184 +334,3 @@
         </div>
     </div>
 </header>
-
-<?php
-// Helper functions for top navigation
-
-/**
- * Get the title of the current page
- * 
- * @return string Page title
- */
-function getPageTitle() {
-    $page = basename($_SERVER['PHP_SELF'], '.php');
-    $page = str_replace('-', ' ', $page);
-    return ucwords($page);
-}
-
-/**
- * Get unread notifications count for current user
- * 
- * @return int Count of unread notifications
- */
-function getUnreadNotificationsCount() {
-    global $conn;
-    
-    $userId = $_SESSION['user_id'];
-    $query = "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";
-    
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $userId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result && $row = $result->fetch_assoc()) {
-        return $row['count'];
-    }
-    
-    return 0;
-}
-
-/**
- * Get recent notifications for current user
- * 
- * @param int $limit Number of notifications to get
- * @return array Notifications
- */
-function getRecentNotifications($limit = 5) {
-    global $conn;
-    
-    $userId = $_SESSION['user_id'];
-    $query = "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?";
-    
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("ii", $userId, $limit);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $notifications = [];
-    while ($row = $result->fetch_assoc()) {
-        $notifications[] = $row;
-    }
-    
-    return $notifications;
-}
-
-/**
- * Get icon for notification type
- * 
- * @param string $type Notification type
- * @return string Icon name
- */
-function getNotificationIcon($type) {
-    switch ($type) {
-        case 'incident':
-            return 'alert-triangle';
-        case 'assignment':
-            return 'calendar';
-        case 'message':
-            return 'message-square';
-        case 'system':
-            return 'info';
-        default:
-            return 'bell';
-    }
-}
-
-/**
- * Get unread messages count for current user
- * 
- * @return int Count of unread messages
- */
-function getUnreadMessagesCount() {
-    global $conn;
-    
-    $userId = $_SESSION['user_id'];
-    $query = "SELECT COUNT(*) as count FROM messages WHERE receiver_id = ? AND is_read = 0";
-    
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $userId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result && $row = $result->fetch_assoc()) {
-        return $row['count'];
-    }
-    
-    return 0;
-}
-
-/**
- * Get recent messages for current user
- * 
- * @param int $limit Number of messages to get
- * @return array Messages with sender information
- */
-function getRecentMessages($limit = 5) {
-    global $conn;
-    
-    $userId = $_SESSION['user_id'];
-    $query = "SELECT m.*, u.name as sender_name 
-              FROM messages m 
-              JOIN users u ON m.sender_id = u.id 
-              WHERE m.receiver_id = ? 
-              ORDER BY m.created_at DESC 
-              LIMIT ?";
-    
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("ii", $userId, $limit);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $messages = [];
-    while ($row = $result->fetch_assoc()) {
-        $messages[] = $row;
-    }
-    
-    return $messages;
-}
-
-/**
- * Get initials from name
- * 
- * @param string $name Full name
- * @return string Initials
- */
-function getInitials($name) {
-    $words = explode(' ', $name);
-    $initials = '';
-    
-    foreach ($words as $word) {
-        $initials .= strtoupper(substr($word, 0, 1));
-    }
-    
-    return substr($initials, 0, 2);
-}
-
-/**
- * Get time ago from datetime
- * 
- * @param string $datetime Datetime string
- * @return string Time ago
- */
-function getTimeAgo($datetime) {
-    $time = strtotime($datetime);
-    $now = time();
-    $diff = $now - $time;
-    
-    if ($diff < 60) {
-        return 'Just now';
-    } elseif ($diff < 3600) {
-        $mins = floor($diff / 60);
-        return $mins . ' min' . ($mins > 1 ? 's' : '') . ' ago';
-    } elseif ($diff < 86400) {
-        $hours = floor($diff / 3600);
-        return $hours . ' hour' . ($hours > 1 ? 's' : '') . ' ago';
-    } elseif ($diff < 604800) {
-        $days = floor($diff / 86400);
-        return $days . ' day' . ($days > 1 ? 's' : '') . ' ago';
-    } else {
-        return date('M j, Y', $time);
-    }
-}
-?>
