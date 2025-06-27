@@ -197,9 +197,7 @@ function getTimeAgo($datetime) {
 
 <header class="top-nav">
     <div class="left-section">
-        <button id="mobile-sidebar-toggle" class="mobile-sidebar-toggle">
-            <i data-lucide="menu"></i>
-        </button>
+        <button id="mobile-sidebar-toggle" class="mobile-sidebar-toggle" aria-label="Toggle sidebar">
         <div class="page-title">
             <h2><?php echo getPageTitle(); ?></h2>
         </div>
