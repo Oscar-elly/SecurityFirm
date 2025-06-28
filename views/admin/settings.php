@@ -6,10 +6,6 @@ require_once '../../includes/db.php';
 
 requireRole('admin');
 
-<<<<<<< HEAD
-=======
-// Handle form submissions
->>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
@@ -17,7 +13,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $name = sanitize($_POST['name']);
                 $email = sanitize($_POST['email']);
                 $phone = sanitize($_POST['phone']);
-<<<<<<< HEAD
 
                 // Handle profile picture upload if any
                 if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
@@ -43,8 +38,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['error'] = 'Invalid file type for profile picture.';
                     }
                 }
-=======
->>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
                 
                 $query = "UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ?";
                 $result = executeQuery($query, [$name, $email, $phone, $_SESSION['user_id']]);
@@ -160,7 +153,6 @@ $systemStats = [
                             <h2>Profile Information</h2>
                         </div>
                         <div class="card-body">
-<<<<<<< HEAD
                             <form method="POST" enctype="multipart/form-data">
                                 <input type="hidden" name="action" value="update_profile">
                                 <div class="form-row" style="align-items: center;">
@@ -196,31 +188,6 @@ $systemStats = [
                                                 <input type="text" id="role" value="<?php echo ucfirst($currentUser['role']); ?>" readonly>
                                             </div>
                                         </div>
-=======
-                            <form method="POST">
-                                <input type="hidden" name="action" value="update_profile">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="name">Full Name</label>
-                                        <input type="text" id="name" name="name" value="<?php echo sanitize($currentUser['name']); ?>" required>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="email">Email Address</label>
-                                        <input type="email" id="email" name="email" value="<?php echo sanitize($currentUser['email']); ?>" required>
-                                    </div>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="phone">Phone Number</label>
-                                        <input type="tel" id="phone" name="phone" value="<?php echo sanitize($currentUser['phone']); ?>">
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="role">Role</label>
-                                        <input type="text" id="role" value="<?php echo ucfirst($currentUser['role']); ?>" readonly>
->>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
                                     </div>
                                 </div>
                                 
@@ -230,15 +197,12 @@ $systemStats = [
                                     </button>
                                 </div>
                             </form>
-<<<<<<< HEAD
                             <form method="POST" style="margin-top: 1rem;">
                                 <input type="hidden" name="toggle_theme" value="1" />
                                 <button type="submit" class="btn btn-secondary">
                                     Switch to <?php echo ($_SESSION['theme_mode'] ?? 'light') === 'light' ? 'Dark' : 'Light'; ?> Mode
                                 </button>
                             </form>
-=======
->>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
                         </div>
                     </div>
                 </div>
