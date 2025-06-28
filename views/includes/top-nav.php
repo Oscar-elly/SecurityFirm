@@ -238,7 +238,11 @@ function getTimeAgo($datetime) {
                     if (!empty($notifications)):
                         foreach ($notifications as $notification):
                     ?>
+<<<<<<< HEAD
                     <a href="<?php echo $notification['link'] ? '/SecurityFirm/' . ltrim($notification['link'], '/') : '#'; ?>" class="notification-item <?php echo $notification['is_read'] ? '' : 'unread'; ?>">
+=======
+                    <a href="<?php echo $notification['link'] ? '../' . $notification['link'] : '#'; ?>" class="notification-item <?php echo $notification['is_read'] ? '' : 'unread'; ?>">
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
                         <div class="notification-icon">
                             <i data-lucide="<?php echo getNotificationIcon($notification['type']); ?>"></i>
                         </div>

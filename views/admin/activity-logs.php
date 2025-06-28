@@ -359,4 +359,16 @@ function getRoleBadgeClass($role) {
         default: return 'secondary';
     }
 }
+<<<<<<< HEAD
+=======
+
+function getInitials($name) {
+    $words = explode(' ', $name);
+    $initials = '';
+    foreach ($words as $word) {
+        $initials .= strtoupper(substr($word, 0, 1));
+    }
+    return substr($initials, 0, 2);
+}
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
 ?>

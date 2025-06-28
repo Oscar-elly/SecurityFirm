@@ -68,8 +68,8 @@
                 </a>
             </li>
             
-            <li class="<?php echo basename($_SERVER['PHP_SELF']) === 'risk-assessment.php' ? 'active' : ''; ?>">
-                <a href="risk-assessment.php">
+            <li class="<?php echo basename($_SERVER['PHP_SELF']) === '../organization/risk-assessment.php' ? 'active' : ''; ?>">
+                <a href="../organization/risk-assessment.php">
                     <i data-lucide="activity"></i>
                     <span>Risk Assessment</span>
                 </a>
@@ -86,8 +86,8 @@
                 </a>
             </li>
             
-            <li class="<?php echo basename($_SERVER['PHP_SELF']) === 'notifications.php' ? 'active' : ''; ?>">
-                <a href="notifications.php">
+            <li class="<?php echo basename($_SERVER['PHP_SELF']) === '../shared/notifications.php' ? 'active' : ''; ?>">
+                <a href="../shared/notifications.php">
                     <i data-lucide="bell"></i>
                     <span>Notifications</span>
                 </a>
