@@ -6,6 +6,14 @@ require_once '../../includes/db.php';
 
 requireRole('admin');
 
+<<<<<<< HEAD
+=======
+// Get analytics data
+$currentYear = date('Y');
+$currentMonth = date('Y-m');
+
+// Monthly incident trends
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
 $incidentTrends = executeQuery("
     SELECT DATE_FORMAT(incident_time, '%Y-%m') as month, 
            COUNT(*) as count,
@@ -16,6 +24,10 @@ $incidentTrends = executeQuery("
     ORDER BY month DESC
 ");
 
+<<<<<<< HEAD
+=======
+// Guard performance analytics
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
 $guardPerformance = executeQuery("
     SELECT AVG(overall_rating) as avg_rating,
            COUNT(*) as total_evaluations,
@@ -26,6 +38,10 @@ $guardPerformance = executeQuery("
     ORDER BY month
 ");
 
+<<<<<<< HEAD
+=======
+// Attendance analytics
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
 $attendanceStats = executeQuery("
     SELECT status, COUNT(*) as count,
            ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM attendance)), 2) as percentage
@@ -34,6 +50,10 @@ $attendanceStats = executeQuery("
     GROUP BY status
 ");
 
+<<<<<<< HEAD
+=======
+// Location incident distribution
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
 $locationIncidents = executeQuery("
     SELECT l.name as location_name, o.name as organization_name,
            COUNT(i.id) as incident_count
@@ -45,6 +65,10 @@ $locationIncidents = executeQuery("
     LIMIT 10
 ");
 
+<<<<<<< HEAD
+=======
+// Response time analytics
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
 $responseTimeData = executeQuery("
     SELECT severity,
            AVG(TIMESTAMPDIFF(HOUR, created_at, 
@@ -58,6 +82,10 @@ $responseTimeData = executeQuery("
     GROUP BY severity
 ");
 
+<<<<<<< HEAD
+=======
+// Guard utilization
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
 $guardUtilization = executeQuery("
     SELECT COUNT(DISTINCT da.guard_id) as active_guards,
            (SELECT COUNT(*) FROM guards) as total_guards,
@@ -134,12 +162,19 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                         <div class="stat-details">
                             <h3><?php 
                             $presentRate = 0;
+<<<<<<< HEAD
                             if (is_array($attendanceStats) && isset($attendanceStats[0]) && is_array($attendanceStats[0])) {
                                 foreach ($attendanceStats as $stat) {
                                     if (isset($stat['status']) && $stat['status'] === 'present') {
                                         $presentRate = $stat['percentage'];
                                         break;
                                     }
+=======
+                            foreach ($attendanceStats as $stat) {
+                                if ($stat['status'] === 'present') {
+                                    $presentRate = $stat['percentage'];
+                                    break;
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
                                 }
                             }
                             echo $presentRate;
@@ -208,6 +243,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                                     </tr>
                                 </thead>
                                 <tbody>
+<<<<<<< HEAD
                                     <?php if (is_array($locationIncidents)) : ?>
                                         <?php foreach ($locationIncidents as $location): ?>
                                         <tr>
@@ -231,6 +267,29 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                                         </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
+=======
+                                    <?php foreach ($locationIncidents as $location): ?>
+                                    <tr>
+                                        <td><?php echo sanitize($location['location_name']); ?></td>
+                                        <td><?php echo sanitize($location['organization_name']); ?></td>
+                                        <td><?php echo $location['incident_count']; ?></td>
+                                        <td>
+                                            <?php 
+                                            $riskLevel = 'Low';
+                                            $riskClass = 'success';
+                                            if ($location['incident_count'] > 10) {
+                                                $riskLevel = 'High';
+                                                $riskClass = 'danger';
+                                            } elseif ($location['incident_count'] > 5) {
+                                                $riskLevel = 'Medium';
+                                                $riskClass = 'warning';
+                                            }
+                                            ?>
+                                            <span class="badge badge-<?php echo $riskClass; ?>"><?php echo $riskLevel; ?></span>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
                                 </tbody>
                             </table>
                         </div>
@@ -266,6 +325,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
 
     <script>
         lucide.createIcons();
+<<<<<<< HEAD
 
         // Helper function to safely parse JSON data
         function safeParse(json) {
@@ -280,6 +340,11 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
         // Incident Trends Chart
         const incidentDataRaw = '<?php echo json_encode($incidentTrends); ?>';
         const incidentData = safeParse(incidentDataRaw);
+=======
+        
+        // Incident Trends Chart
+        const incidentData = <?php echo json_encode($incidentTrends); ?>;
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
         const incidentCtx = document.getElementById('incidentTrendsChart').getContext('2d');
         new Chart(incidentCtx, {
             type: 'line',
@@ -306,10 +371,16 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                 }
             }
         });
+<<<<<<< HEAD
 
         // Attendance Chart
         const attendanceDataRaw = '<?php echo json_encode($attendanceStats); ?>';
         const attendanceData = safeParse(attendanceDataRaw);
+=======
+        
+        // Attendance Chart
+        const attendanceData = <?php echo json_encode($attendanceStats); ?>;
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
         const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
         new Chart(attendanceCtx, {
             type: 'doughnut',
@@ -325,10 +396,16 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                 maintainAspectRatio: false
             }
         });
+<<<<<<< HEAD
 
         // Performance Chart
         const performanceDataRaw = '<?php echo json_encode($guardPerformance); ?>';
         const performanceData = safeParse(performanceDataRaw);
+=======
+        
+        // Performance Chart
+        const performanceData = <?php echo json_encode($guardPerformance); ?>;
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
         const performanceCtx = document.getElementById('performanceChart').getContext('2d');
         new Chart(performanceCtx, {
             type: 'bar',
@@ -351,10 +428,16 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                 }
             }
         });
+<<<<<<< HEAD
 
         // Response Time Chart
         const responseDataRaw = '<?php echo json_encode($responseTimeData); ?>';
         const responseData = safeParse(responseDataRaw);
+=======
+        
+        // Response Time Chart
+        const responseData = <?php echo json_encode($responseTimeData); ?>;
+>>>>>>> e01608b833e801a50a96cb8615f011daabc9025b
         const responseCtx = document.getElementById('responseTimeChart').getContext('2d');
         new Chart(responseCtx, {
             type: 'bar',
