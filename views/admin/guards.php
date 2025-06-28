@@ -132,11 +132,11 @@ $guards = executeQuery($query);
                                             </span>
                                         </td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline" onclick="viewGuard(<?php echo $guard['user_id']; ?>)" style="pointer-events:auto;">
-                                                <i data-lucide="eye" style="pointer-events:none;"></i>
+                                            <button class="btn btn-sm btn-outline" onclick="viewGuard(<?php echo $guard['user_id']; ?>)">
+                                                <i data-lucide="eye"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-warning" onclick="editGuard(<?php echo $guard['user_id']; ?>)" style="pointer-events:auto;">
-                                                <i data-lucide="edit" style="pointer-events:none;"></i>
+                                            <button class="btn btn-sm btn-warning" onclick="editGuard(<?php echo $guard['user_id']; ?>)">
+                                                <i data-lucide="edit"></i>
                                             </button>
                                             <form method="POST" style="display: inline;">
                                                 <input type="hidden" name="action" value="update_status">
@@ -233,16 +233,6 @@ $guards = executeQuery($query);
         </div>
     </div>
 
-    <!-- Guard Modal -->
-    <div id="guardModal" class="modal" style="display: none;">
-        <div class="modal-content" id="guardModalContent">
-            <!-- Content loaded dynamically -->
-        </div>
-        <button onclick="closeGuardModal()" class="btn btn-sm btn-outline" style="position: absolute; top: 10px; right: 10px;">
-            <i data-lucide="x"></i>
-        </button>
-    </div>
-
     <style>
     .modal {
         position: fixed;
@@ -299,49 +289,11 @@ $guards = executeQuery($query);
         }
         
         function viewGuard(id) {
-            // Load guard details in modal
-            fetch('view-guard.php?id=' + id)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.text();
-                })
-                .then(html => {
-                    const modalContent = document.getElementById('guardModalContent');
-                    if (modalContent) {
-                        modalContent.innerHTML = html;
-                        document.getElementById('guardModal').style.display = 'flex';
-                    } else {
-                        console.error('Modal content container not found');
-                    }
-                })
-                .catch(error => {
-                    console.error('Fetch error:', error);
-                });
+            window.location.href = 'view-guard.php?id=' + id;
         }
         
         function editGuard(id) {
-            // Load guard edit form in modal
-            fetch('edit-guard.php?id=' + id)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.text();
-                })
-                .then(html => {
-                    const modalContent = document.getElementById('guardModalContent');
-                    if (modalContent) {
-                        modalContent.innerHTML = html;
-                        document.getElementById('guardModal').style.display = 'flex';
-                    } else {
-                        console.error('Modal content container not found');
-                    }
-                })
-                .catch(error => {
-                    console.error('Fetch error:', error);
-                });
+            window.location.href = 'edit-guard.php?id=' + id;
         }
     </script>
 </body>

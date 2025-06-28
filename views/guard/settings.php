@@ -6,25 +6,15 @@ require_once '../../includes/db.php';
 
 requireRole('guard');
 
+// Get current user information
+$userId = $_SESSION['user_id'];
+$query = "SELECT * FROM users WHERE id = ?";
+$currentUser = executeQuery($query, [$userId], ['single' => true]);
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
-            case 'update_profile':
-                $name = sanitize($_POST['name']);
-                $email = sanitize($_POST['email']);
-                $phone = sanitize($_POST['phone']);
-                
-                $query = "UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ?";
-                $result = executeQuery($query, [$name, $email, $phone, $_SESSION['user_id']]);
-                
-                if ($result) {
-                    $_SESSION['success'] = 'Profile updated successfully';
-                } else {
-                    $_SESSION['error'] = 'Failed to update profile';
-                }
-                break;
-                
             case 'change_password':
                 $current_password = $_POST['current_password'];
                 $new_password = $_POST['new_password'];
@@ -36,10 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // Verify current password
-                $query = "SELECT password FROM users WHERE id = ?";
-                $user = executeQuery($query, [$_SESSION['user_id']], ['single' => true]);
-                
-                if (!password_verify($current_password, $user['password'])) {
+                if (!password_verify($current_password, $currentUser['password'])) {
                     $_SESSION['error'] = 'Current password is incorrect';
                     break;
                 }
@@ -47,168 +34,184 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Update password
                 $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
                 $query = "UPDATE users SET password = ? WHERE id = ?";
-                $result = executeQuery($query, [$hashed_password, $_SESSION['user_id']]);
+                $result = executeQuery($query, [$hashed_password, $userId]);
                 
                 if ($result) {
+                    logActivity($userId, "Changed password", 'security');
                     $_SESSION['success'] = 'Password changed successfully';
                 } else {
                     $_SESSION['error'] = 'Failed to change password';
                 }
                 break;
-                
-            case 'update_system_settings':
-                // This would typically update a settings table
-                $_SESSION['success'] = 'System settings updated successfully';
-                break;
         }
         redirect($_SERVER['PHP_SELF']);
     }
 }
-
-// Get current user information
-$query = "SELECT * FROM users WHERE id = ?";
-$currentUser = executeQuery($query, [$_SESSION['user_id']], ['single' => true]);
-
-// Get system statistics
-$systemStats = [
-    'total_users' => executeQuery("SELECT COUNT(*) as count FROM users WHERE role = 'guard'", [], ['single' => true])['count'],
-    'total_incidents' => executeQuery("SELECT COUNT(*) as count FROM incidents WHERE reported_by = ?", [$_SESSION['user_id']], ['single' => true])['count'],
-];
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings | <?php echo SITE_NAME; ?></title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="../../assets/css/styles.css" />
-    <link rel="stylesheet" href="../../assets/css/dashboard.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/css/styles.css">
+    <link rel="stylesheet" href="../../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../../assets/css/guard-dashboard.css">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
     <div class="dashboard-container">
         <?php include '../includes/guard-sidebar.php'; ?>
-
+        
         <main class="main-content">
             <?php include '../includes/top-nav.php'; ?>
-
+            
             <div class="dashboard-content">
                 <div class="dashboard-header">
                     <h1>Settings</h1>
-                    <p>Manage your account and system settings</p>
+                    <p>Manage your account settings and preferences</p>
                 </div>
-
+                
                 <?php echo flashMessage('success'); ?>
                 <?php echo flashMessage('error'); ?>
-
-                <!-- Settings Tabs -->
-                <div class="settings-tabs">
-                    <button class="tab-btn active" onclick="showTab('profile')">
-                        <i data-lucide="user"></i> Profile Settings
-                    </button>
-                    <button class="tab-btn" onclick="showTab('security')">
-                        <i data-lucide="shield"></i> Security
-                    </button>
-                    <button class="tab-btn" onclick="showTab('system')">
-                        <i data-lucide="settings"></i> System Settings
-                    </button>
-                </div>
-
-                <!-- Profile Settings Tab -->
-                <div id="profile-tab" class="tab-content active">
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Profile Information</h2>
+                
+                <!-- Account Information -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Account Information</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="account-info">
+                            <div class="info-item">
+                                <i data-lucide="user"></i>
+                                <div>
+                                    <strong>Name</strong>
+                                    <p><?php echo sanitize($currentUser['name']); ?></p>
+                                </div>
+                            </div>
+                            
+                            <div class="info-item">
+                                <i data-lucide="mail"></i>
+                                <div>
+                                    <strong>Email</strong>
+                                    <p><?php echo sanitize($currentUser['email']); ?></p>
+                                </div>
+                            </div>
+                            
+                            <div class="info-item">
+                                <i data-lucide="phone"></i>
+                                <div>
+                                    <strong>Phone</strong>
+                                    <p><?php echo sanitize($currentUser['phone']); ?></p>
+                                </div>
+                            </div>
+                            
+                            <div class="info-item">
+                                <i data-lucide="shield"></i>
+                                <div>
+                                    <strong>Role</strong>
+                                    <p><?php echo ucfirst($currentUser['role']); ?></p>
+                                </div>
+                            </div>
+                            
+                            <div class="info-item">
+                                <i data-lucide="calendar"></i>
+                                <div>
+                                    <strong>Account Created</strong>
+                                    <p><?php echo formatDate($currentUser['created_at'], 'd M Y'); ?></p>
+                                </div>
+                            </div>
+                            
+                            <div class="info-item">
+                                <i data-lucide="activity"></i>
+                                <div>
+                                    <strong>Status</strong>
+                                    <p>
+                                        <span class="badge badge-<?php echo $currentUser['status'] === 'active' ? 'success' : 'danger'; ?>">
+                                            <?php echo ucfirst($currentUser['status']); ?>
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <form method="POST">
-                                <input type="hidden" name="action" value="update_profile" />
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="name">Full Name</label>
-                                        <input type="text" id="name" name="name" value="<?php echo sanitize($currentUser['name']); ?>" required />
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="email">Email Address</label>
-                                        <input type="email" id="email" name="email" value="<?php echo sanitize($currentUser['email']); ?>" required />
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="phone">Phone Number</label>
-                                        <input type="tel" id="phone" name="phone" value="<?php echo sanitize($currentUser['phone']); ?>" />
-                                    </div>
-                                </div>
-                                <div class="form-actions">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i data-lucide="save"></i> Update Profile
-                                    </button>
-                                </div>
-                            </form>
+                        
+                        <div class="account-actions">
+                            <a href="profile.php" class="btn btn-primary">
+                                <i data-lucide="edit"></i> Edit Profile
+                            </a>
                         </div>
                     </div>
                 </div>
-
-                <!-- Security Tab -->
-                <div id="security-tab" class="tab-content">
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Change Password</h2>
-                        </div>
-                        <div class="card-body">
-                            <form method="POST">
-                                <input type="hidden" name="action" value="change_password" />
-                                <div class="form-group">
-                                    <label for="current_password">Current Password</label>
-                                    <input type="password" id="current_password" name="current_password" required />
-                                </div>
-                                <div class="form-group">
-                                    <label for="new_password">New Password</label>
-                                    <input type="password" id="new_password" name="new_password" required minlength="6" />
-                                    <small class="form-help">Password must be at least 6 characters long</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="confirm_password">Confirm New Password</label>
-                                    <input type="password" id="confirm_password" name="confirm_password" required />
-                                </div>
-                                <div class="form-actions">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i data-lucide="lock"></i> Change Password
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                
+                <!-- Security Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Security Settings</h2>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST">
+                            <input type="hidden" name="action" value="change_password">
+                            
+                            <div class="form-group">
+                                <label for="current_password">Current Password</label>
+                                <input type="password" id="current_password" name="current_password" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="new_password">New Password</label>
+                                <input type="password" id="new_password" name="new_password" required minlength="6">
+                                <small class="form-help">Password must be at least 6 characters long</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="confirm_password">Confirm New Password</label>
+                                <input type="password" id="confirm_password" name="confirm_password" required>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">
+                                    <i data-lucide="lock"></i> Change Password
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
-
-                <!-- System Settings Tab -->
-                <div id="system-tab" class="tab-content">
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>System Overview</h2>
-                        </div>
-                        <div class="card-body">
-                            <div class="system-stats">
-                                <div class="stat-item">
-                                    <div class="stat-icon">
-                                        <i data-lucide="users"></i>
+                
+                <!-- App Information -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Application Information</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="app-info">
+                            <div class="info-section">
+                                <h3>About <?php echo SITE_NAME; ?></h3>
+                                <p>A comprehensive security management system designed to streamline security operations, 
+                                   manage guard assignments, track incidents, and ensure effective communication between 
+                                   security personnel and organizations.</p>
+                            </div>
+                            
+                            <div class="info-section">
+                                <h3>Support</h3>
+                                <p>If you need assistance or have questions about using the system, please contact your administrator or the support team.</p>
+                                <div class="support-contacts">
+                                    <div class="contact-item">
+                                        <i data-lucide="mail"></i>
+                                        <span><?php echo ADMIN_EMAIL; ?></span>
                                     </div>
-                                    <div class="stat-details">
-                                        <h3><?php echo $systemStats['total_users']; ?></h3>
-                                        <p>Total Guards</p>
+                                    <div class="contact-item">
+                                        <i data-lucide="phone"></i>
+                                        <span>+254-700-000-000</span>
                                     </div>
                                 </div>
-                                <div class="stat-item">
-                                    <div class="stat-icon">
-                                        <i data-lucide="alert-triangle"></i>
-                                    </div>
-                                    <div class="stat-details">
-                                        <h3><?php echo $systemStats['total_incidents']; ?></h3>
-                                        <p>Total Incidents</p>
-                                    </div>
-                                </div>
+                            </div>
+                            
+                            <div class="info-section">
+                                <h3>Privacy & Security</h3>
+                                <p>Your personal information is protected and used only for security management purposes. 
+                                   All data is encrypted and stored securely.</p>
                             </div>
                         </div>
                     </div>
@@ -218,51 +221,49 @@ $systemStats = [
     </div>
 
     <style>
-    .settings-tabs {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1.5rem;
-        border-bottom: 1px solid #e0e0e0;
+    .account-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
     }
     
-    .tab-btn {
+    .info-item {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        padding: 1rem 1.5rem;
-        background: none;
-        border: none;
-        border-bottom: 2px solid transparent;
-        cursor: pointer;
-        transition: all 0.2s ease;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .info-item i {
+        width: 24px;
+        height: 24px;
+        color: var(--primary-color);
+        flex-shrink: 0;
+    }
+    
+    .info-item strong {
+        display: block;
+        margin-bottom: 0.25rem;
+        color: #333;
+    }
+    
+    .info-item p {
+        margin: 0;
         color: #666;
     }
     
-    .tab-btn.active {
-        color: var(--primary-color);
-        border-bottom-color: var(--primary-color);
-    }
-    
-    .tab-btn:hover {
-        color: var(--primary-color);
-    }
-    
-    .tab-content {
-        display: none;
-    }
-    
-    .tab-content.active {
-        display: block;
-    }
-    
-    .form-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
+    .account-actions {
+        padding-top: 1rem;
+        border-top: 1px solid #eee;
     }
     
     .form-actions {
-        margin-top: 1.5rem;
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 2rem;
         padding-top: 1rem;
         border-top: 1px solid #eee;
     }
@@ -273,24 +274,46 @@ $systemStats = [
         font-size: 0.875rem;
         color: #666;
     }
+    
+    .app-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+    }
+    
+    .info-section h3 {
+        margin-bottom: 1rem;
+        color: var(--primary-color);
+    }
+    
+    .info-section p {
+        margin-bottom: 1rem;
+        color: #666;
+        line-height: 1.6;
+    }
+    
+    .support-contacts {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #666;
+    }
+    
+    .contact-item i {
+        width: 16px;
+        height: 16px;
+        color: var(--primary-color);
+    }
     </style>
 
     <script>
         lucide.createIcons();
-        
-        function showTab(tabName) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Show selected tab
-            document.getElementById(tabName + '-tab').classList.add('active');
-            event.target.classList.add('active');
-        }
         
         // Password confirmation validation
         document.getElementById('confirm_password').addEventListener('input', function() {
