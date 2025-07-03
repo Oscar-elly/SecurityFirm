@@ -256,3 +256,68 @@ function getDistance($lat1, $lon1, $lat2, $lon2) {
     
     return $earth_radius * $c;
 }
+
+/**
+ * Send SMS using Africa's Talking API
+ * 
+ * @param string|array $recipients Phone number(s) in international format, comma separated or array
+ * @param string $message Message content
+ * @return bool True on success, false on failure
+ */
+function sendSMS($recipients, $message) {
+    $username = AT_USERNAME;
+    $apiKey = AT_API_KEY;
+    $url = "https://api.africastalking.com/version1/messaging";
+
+    if (is_array($recipients)) {
+        $recipients = implode('+254778677339', $recipients);
+    }
+
+    $postData = http_build_query([
+        'username' => $username,
+        'to' => $recipients,
+        'message' => $message,
+        'from' => 'SecureConnect'
+    ]);
+
+    $headers = [
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json",
+        "apikey: $apiKey"
+    ];
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+
+    // Debug logging
+    error_log("Africa's Talking SMS request: " . $postData);
+    error_log("Africa's Talking SMS response: " . $response);
+    if ($error) {
+        error_log("Africa's Talking SMS error: " . $error);
+        curl_close($ch);
+        return false;
+    }
+
+    curl_close($ch);
+
+    $result = json_decode($response, true);
+    if (isset($result['SMSMessageData']['Recipients'])) {
+        foreach ($result['SMSMessageData']['Recipients'] as $recipient) {
+            if ($recipient['status'] !== 'Success') {
+                error_log("SMS to {$recipient['number']} failed: {$recipient['status']}");
+                return false;
+            }
+        }
+        return true;
+    } else {
+        error_log("Africa's Talking SMS unexpected response: " . $response);
+        return false;
+    }
+}

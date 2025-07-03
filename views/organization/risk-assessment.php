@@ -6,13 +6,13 @@ require_once '../../includes/db.php';
 
 requireRole('organization');
 
-$organizationId = $_SESSION['organization_id'];
+$organizationId = $_SESSION['user_id'];
 
 // Fetch risk assessment data (example: incidents by risk level, locations at risk, etc.)
 $riskData = executeQuery("
     SELECT severity, COUNT(*) as count
     FROM incidents
-    WHERE organization_id = ?
+    WHERE user_id = ?
     GROUP BY severity
     ORDER BY FIELD(severity, 'critical', 'high', 'medium', 'low')
 ", [$organizationId]);
@@ -21,7 +21,7 @@ $locationsAtRisk = executeQuery("
     SELECT l.name as location_name, COUNT(i.id) as incident_count
     FROM locations l
     LEFT JOIN incidents i ON l.id = i.location_id
-    WHERE l.organization_id = ?
+    WHERE l.user_id = ?
     GROUP BY l.id, l.name
     HAVING incident_count > 0
     ORDER BY incident_count DESC

@@ -6,7 +6,12 @@ require_once '../../includes/db.php';
 
 requireRole('organization');
 
-$organizationId = $_SESSION['organization_id'];
+$organizationId = $_SESSION['user_id'] ?? null;
+
+if (!$organizationId) {
+    header('Location: ../login.php');
+    exit;
+}
 
 // Monthly incident trends for organization
 $incidentTrends = executeQuery("
@@ -42,6 +47,10 @@ $attendanceStats = executeQuery("
     GROUP BY status
 ", [$organizationId, $organizationId]);
 
+if ($attendanceStats === false) {
+    $attendanceStats = [];
+}
+
 // Location incident distribution for organization
 $locationIncidents = executeQuery("
     SELECT l.name as location_name,
@@ -53,6 +62,10 @@ $locationIncidents = executeQuery("
     ORDER BY incident_count DESC
     LIMIT 10
 ", [$organizationId]);
+
+if ($locationIncidents === false) {
+    $locationIncidents = [];
+}
 
 // Response time analytics for organization
 $responseTimeData = executeQuery("
@@ -67,6 +80,10 @@ $responseTimeData = executeQuery("
     WHERE organization_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     GROUP BY severity
 ", [$organizationId]);
+
+if ($responseTimeData === false) {
+    $responseTimeData = [];
+}
 
 // Guard utilization for organization
 $guardUtilization = executeQuery("
@@ -216,28 +233,35 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                                         <th>Risk Level</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <?php foreach ($locationIncidents as $location): ?>
-                                    <tr>
-                                        <td><?php echo sanitize($location['location_name']); ?></td>
-                                        <td><?php echo $location['incident_count']; ?></td>
-                                        <td>
-                                            <?php 
-                                            $riskLevel = 'Low';
-                                            $riskClass = 'success';
-                                            if ($location['incident_count'] > 10) {
-                                                $riskLevel = 'High';
-                                                $riskClass = 'danger';
-                                            } elseif ($location['incident_count'] > 5) {
-                                                $riskLevel = 'Medium';
-                                                $riskClass = 'warning';
-                                            }
-                                            ?>
-                                            <span class="badge badge-<?php echo $riskClass; ?>"><?php echo $riskLevel; ?></span>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
+                <tbody>
+                    <?php 
+                    if (is_array($locationIncidents)) {
+                        foreach ($locationIncidents as $location): ?>
+                        <tr>
+                            <td><?php echo sanitize($location['location_name']); ?></td>
+                            <td><?php echo $location['incident_count']; ?></td>
+                            <td>
+                                <?php 
+                                $riskLevel = 'Low';
+                                $riskClass = 'success';
+                                if ($location['incident_count'] > 10) {
+                                    $riskLevel = 'High';
+                                    $riskClass = 'danger';
+                                } elseif ($location['incident_count'] > 5) {
+                                    $riskLevel = 'Medium';
+                                    $riskClass = 'warning';
+                                }
+                                ?>
+                                <span class="badge badge-<?php echo $riskClass; ?>"><?php echo $riskLevel; ?></span>
+                            </td>
+                        </tr>
+                    <?php 
+                        endforeach; 
+                    } else {
+                        echo '<tr><td colspan="3">No data available</td></tr>';
+                    }
+                    ?>
+                </tbody>
                             </table>
                         </div>
                     </div>
@@ -369,3 +393,5 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
             }
         });
     </script>
+</body>
+</html>

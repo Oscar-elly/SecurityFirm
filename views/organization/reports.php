@@ -6,14 +6,14 @@ require_once '../../includes/db.php';
 
 requireRole('organization');
 
-$organizationId = $_SESSION['organization_id'];
+$organizationId = $_SESSION['user_id'];
 
 // Fetch reports data (example: incident reports, guard reports, etc.)
 $incidentReports = executeQuery("
     SELECT i.*, l.name as location_name
     FROM incidents i
     JOIN locations l ON i.location_id = l.id
-    WHERE l.organization_id = ?
+    WHERE l.user_id = ?
     ORDER BY i.incident_time DESC
     LIMIT 50
 ", [$organizationId]);

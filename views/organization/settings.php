@@ -72,8 +72,8 @@ $currentOrganization = executeQuery($query, [$_SESSION['user_id']], ['single' =>
 // Get system statistics
 $systemStats = [
     'total_users' => executeQuery("SELECT COUNT(*) as count FROM users WHERE role = 'organization'", [], ['single' => true])['count'],
-    'total_guards' => executeQuery("SELECT COUNT(*) as count FROM guards WHERE organization_id = ?", [$_SESSION['organization_id']], ['single' => true])['count'],
-    'total_incidents' => executeQuery("SELECT COUNT(*) as count FROM incidents WHERE organization_id = ?", [$_SESSION['organization_id']], ['single' => true])['count'],
+    'total_guards' => executeQuery("SELECT COUNT(*) as count FROM guards WHERE user_id = ?", [$_SESSION['user_id']], ['single' => true])['count'],
+    'total_incidents' => executeQuery("SELECT COUNT(*) as count FROM incidents WHERE user_id = ?", [$_SESSION['user_id']], ['single' => true])['count'],
 ];
 ?>
 

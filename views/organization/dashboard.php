@@ -4,50 +4,47 @@ require_once '../../includes/config.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/db.php';
 
-// Check if user is logged in and has organization role
 requireRole('organization');
 
-// Get organization information
-$userId = $_SESSION['user_id'];
-$query = "SELECT * FROM organizations WHERE user_id = ?";
-$organization = executeQuery($query, [$userId], ['single' => true]);
-
-if (!$organization) {
-    $_SESSION['error'] = 'Organization information not found';
-    redirect(SITE_URL);
+if (!isset($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
 }
 
-// Get locations count
-$query = "SELECT COUNT(*) as count FROM locations WHERE organization_id = ?";
-$result = executeQuery($query, [$organization['id']], ['single' => true]);
-$locationsCount = $result['count'] ?? 0;
+$userId = $_SESSION['user_id'];
 
-// Get active guards count
-$query = "SELECT COUNT(DISTINCT g.id) as count 
-          FROM guards g 
-          JOIN duty_assignments da ON g.id = da.guard_id 
-          JOIN locations l ON da.location_id = l.id 
-          WHERE l.organization_id = ? 
-          AND da.status = 'active' 
-          AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())";
-$result = executeQuery($query, [$organization['id']], ['single' => true]);
-$activeGuardsCount = $result['count'] ?? 0;
+// Fetch organization info
+$organizationQuery = "SELECT * FROM organizations WHERE user_id = ?";
+$organization = executeQuery($organizationQuery, [$userId], ['single' => true]);
 
-// Get incident count
-$query = "SELECT COUNT(*) as count 
-          FROM incidents i 
-          JOIN locations l ON i.location_id = l.id 
-          WHERE l.organization_id = ?";
-$result = executeQuery($query, [$organization['id']], ['single' => true]);
-$incidentsCount = $result['count'] ?? 0;
+// Locations count
+$locationsCountQuery = "SELECT COUNT(*) as count FROM locations WHERE organization_id = ?";
+$locationsCountResult = executeQuery($locationsCountQuery, [$organization['id']], ['single' => true]);
+$locationsCount = $locationsCountResult['count'] ?? 0;
 
-// Get total guard requests count
-$query = "SELECT COUNT(*) as count FROM guard_requests WHERE organization_id = ?";
-$result = executeQuery($query, [$organization['id']], ['single' => true]);
-$requestsCount = $result['count'] ?? 0;
+// Active guards count
+$activeGuardsCountQuery = "SELECT COUNT(DISTINCT g.id) as count
+    FROM duty_assignments da
+    JOIN guards g ON da.guard_id = g.id
+    JOIN locations l ON da.location_id = l.id
+    WHERE l.organization_id = ? AND da.status = 'active' AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())";
+$activeGuardsCountResult = executeQuery($activeGuardsCountQuery, [$organization['id']], ['single' => true]);
+$activeGuardsCount = $activeGuardsCountResult['count'] ?? 0;
 
-// Get active guards
-$query = "SELECT u.name, g.id_number, l.name as location_name, s.name as shift_name, 
+// Incidents count
+$incidentsCountQuery = "SELECT COUNT(*) as count FROM incidents i
+    JOIN locations l ON i.location_id = l.id
+    WHERE l.organization_id = ?";
+$incidentsCountResult = executeQuery($incidentsCountQuery, [$organization['id']], ['single' => true]);
+$incidentsCount = $incidentsCountResult['count'] ?? 0;
+
+// Guard requests count
+$requestsCountQuery = "SELECT COUNT(*) as count FROM guard_requests WHERE organization_id = ?";
+$requestsCountResult = executeQuery($requestsCountQuery, [$organization['id']], ['single' => true]);
+$requestsCount = $requestsCountResult['count'] ?? 0;
+
+// Get active guards details
+$activeGuardsQuery = "SELECT u.name, g.id_number, l.name as location_name, s.name as shift_name, 
                  da.start_date, da.end_date 
           FROM duty_assignments da 
           JOIN guards g ON da.guard_id = g.id 
@@ -57,20 +54,20 @@ $query = "SELECT u.name, g.id_number, l.name as location_name, s.name as shift_n
           WHERE l.organization_id = ? 
           AND da.status = 'active' 
           AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())";
-$activeGuards = executeQuery($query, [$organization['id']]);
+$activeGuards = executeQuery($activeGuardsQuery, [$organization['id']]);
 
 // Get recent incidents
-$query = "SELECT i.*, l.name as location_name, u.name as reporter_name 
+$recentIncidentsQuery = "SELECT i.*, l.name as location_name, u.name as reporter_name 
           FROM incidents i 
           JOIN locations l ON i.location_id = l.id 
           JOIN users u ON i.reported_by = u.id 
           WHERE l.organization_id = ? 
           ORDER BY i.incident_time DESC 
           LIMIT 5";
-$recentIncidents = executeQuery($query, [$organization['id']]);
+$recentIncidents = executeQuery($recentIncidentsQuery, [$organization['id']]);
 
 // Get pending guard requests
-$query = "SELECT gr.*, l.name as location_name, s.name as shift_name 
+$pendingRequestsQuery = "SELECT gr.*, l.name as location_name, s.name as shift_name 
           FROM guard_requests gr 
           JOIN locations l ON gr.location_id = l.id 
           JOIN shifts s ON gr.shift_id = s.id 
@@ -78,20 +75,18 @@ $query = "SELECT gr.*, l.name as location_name, s.name as shift_name
           AND gr.status IN ('pending', 'approved') 
           ORDER BY gr.created_at DESC 
           LIMIT 5";
-$pendingRequests = executeQuery($query, [$organization['id']]);
+$pendingRequests = executeQuery($pendingRequestsQuery, [$organization['id']]);
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Organization Dashboard | <?php echo SITE_NAME; ?></title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../../assets/css/styles.css">
-    <link rel="stylesheet" href="../../assets/css/dashboard.css">
-    <link rel="stylesheet" href="../../assets/css/organization-dashboard.css">
+    <link rel="stylesheet" href="../../assets/css/styles.css" />
+    <link rel="stylesheet" href="../../assets/css/dashboard.css" />
+    <link rel="stylesheet" href="../../assets/css/organization-dashboard.css" />
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>

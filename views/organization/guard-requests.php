@@ -392,3 +392,19 @@ $requests = executeQuery($query, [$organization['id']]);
     </script>
 </body>
 </html>
+
+<?php
+function formatTime($time) {
+    return date('h:i A', strtotime($time));
+}
+
+function getRequestStatusClass($status) {
+    switch ($status) {
+        case 'pending': return 'warning';
+        case 'approved': return 'success';
+        case 'rejected': return 'danger';
+        case 'completed': return 'secondary';
+        default: return 'secondary';
+    }
+}
+?>

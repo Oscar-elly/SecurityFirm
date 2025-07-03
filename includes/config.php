@@ -41,3 +41,8 @@ if (!file_exists(__DIR__ . '/../logs')) {
 if (!file_exists(UPLOAD_DIR)) {
     mkdir(UPLOAD_DIR, 0755, true);
 }
+
+// Africa's Talking API credentials
+define('AT_USERNAME', 'jabanaMessager');
+define('AT_API_KEY', 'atsk_34d53a15becc01c1ff553ef2e4dd1193e2c46d9dd1860690e3b40f5eecd63efe50127a88');
+?>

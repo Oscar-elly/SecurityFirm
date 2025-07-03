@@ -74,6 +74,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                   VALUES (?, ?, ?, 'incident', 'views/admin/incidents.php')";
             executeQuery($notificationQuery, [$admin['id'], 'New Incident Reported', $_SESSION['name'] . ' reported: ' . $title]);
         }
+
+        // Send SMS alerts to admins
+        $adminIds = array_column($admins, 'id');
+        if (!empty($adminIds)) {
+            $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
+            $phoneQuery = "SELECT phone FROM users WHERE id IN ($placeholders)";
+            $phones = executeQuery($phoneQuery, $adminIds);
+            $phoneNumbers = array_column($phones, 'phone');
+
+            $smsMessage = "Alert: New Incident Reported by " . $_SESSION['name'] . ": " . $title;
+            sendSMS($phoneNumbers, $smsMessage);
+        }
         
         $_SESSION['success'] = 'Incident reported successfully';
         redirect('incidents.php');

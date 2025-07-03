@@ -17,7 +17,7 @@ if (!$organization) {
 }
 
 // Get organization locations
-$query = "SELECT * FROM locations WHERE organization_id = ? AND status = 'active'";
+$query = "SELECT * FROM locations WHERE user_id = ? AND status = 'active'";
 $locations = executeQuery($query, [$organization['id']]);
 
 // Get available shifts
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reason = sanitize($_POST['reason']);
     
     // Insert guard request
-    $query = "INSERT INTO guard_requests (organization_id, location_id, number_of_guards, shift_id, start_date, end_date, reason, status) 
+    $query = "INSERT INTO guard_requests (user_id, location_id, number_of_guards, shift_id, start_date, end_date, reason, status) 
               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')";
     $result = executeQuery($query, [$organization['id'], $location_id, $number_of_guards, $shift_id, $start_date, $end_date, $reason]);
     
