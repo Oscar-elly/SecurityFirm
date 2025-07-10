@@ -1,32 +1,59 @@
 <?php
 session_start();
-require_once '../../includes/config.php';
-require_once '../../includes/functions.php';
-require_once '../../includes/db.php';
+
+// Load required files with existence checks
+$requiredFiles = [
+    '../../includes/config.php',
+    '../../includes/functions.php',
+    '../../includes/db.php'
+];
+
+foreach ($requiredFiles as $file) {
+    if (!file_exists($file)) {
+        die("Error: Required file '$file' is missing.");
+    }
+    require_once $file;
+}
+
+// Verify user role and session
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+    header("Location: ../../login.php");
+    exit;
+}
 
 requireRole('organization');
 
-$organizationId = $_SESSION['user_id'];
+// Validate organization ID
+$organizationId = filter_var($_SESSION['user_id'], FILTER_VALIDATE_INT);
+if ($organizationId === false || $organizationId <= 0) {
+    die("Invalid user ID");
+}
 
-// Fetch risk assessment data (example: incidents by risk level, locations at risk, etc.)
-$riskData = executeQuery("
-    SELECT severity, COUNT(*) as count
-    FROM incidents
-    WHERE user_id = ?
-    GROUP BY severity
-    ORDER BY FIELD(severity, 'critical', 'high', 'medium', 'low')
-", [$organizationId]);
+// Fetch risk assessment data with error handling
+try {
+    $riskData = executeQuery("
+        SELECT severity, COUNT(*) as count
+        FROM incidents
+        WHERE user_id = ?
+        GROUP BY severity
+        ORDER BY FIELD(severity, 'critical', 'high', 'medium', 'low')
+    ", [$organizationId]) ?: [];
 
-$locationsAtRisk = executeQuery("
-    SELECT l.name as location_name, COUNT(i.id) as incident_count
-    FROM locations l
-    LEFT JOIN incidents i ON l.id = i.location_id
-    WHERE l.user_id = ?
-    GROUP BY l.id, l.name
-    HAVING incident_count > 0
-    ORDER BY incident_count DESC
-    LIMIT 10
-", [$organizationId]);
+    $locationsAtRisk = executeQuery("
+        SELECT l.name as location_name, COUNT(i.id) as incident_count
+        FROM locations l
+        LEFT JOIN incidents i ON l.id = i.location_id
+        WHERE l.user_id = ?
+        GROUP BY l.id, l.name
+        HAVING incident_count > 0
+        ORDER BY incident_count DESC
+        LIMIT 10
+    ", [$organizationId]) ?: [];
+} catch (Exception $e) {
+    error_log("Database error: " . $e->getMessage());
+    $riskData = [];
+    $locationsAtRisk = [];
+}
 ?>
 
 <!DOCTYPE html>
@@ -34,7 +61,7 @@ $locationsAtRisk = executeQuery("
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Risk Assessment | <?php echo SITE_NAME; ?></title>
+    <title>Risk Assessment | <?php echo htmlspecialchars(SITE_NAME); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../../assets/css/styles.css" />
     <link rel="stylesheet" href="../../assets/css/dashboard.css" />
@@ -42,10 +69,24 @@ $locationsAtRisk = executeQuery("
 </head>
 <body>
     <div class="dashboard-container">
-        <?php include '../includes/organization-sidebar.php'; ?>
+        <?php 
+        $sidebar = '../includes/organization-sidebar.php';
+        if (file_exists($sidebar)) {
+            include $sidebar;
+        } else {
+            error_log("Sidebar file missing: $sidebar");
+        }
+        ?>
 
         <main class="main-content">
-            <?php include '../includes/top-nav.php'; ?>
+            <?php 
+            $topNav = '../includes/top-nav.php';
+            if (file_exists($topNav)) {
+                include $topNav;
+            } else {
+                error_log("Top nav file missing: $topNav");
+            }
+            ?>
 
             <div class="dashboard-content">
                 <div class="dashboard-header">
@@ -58,16 +99,20 @@ $locationsAtRisk = executeQuery("
                         <h2>Incidents by Severity</h2>
                     </div>
                     <div class="card-body">
+                        <?php if (!empty($riskData)): ?>
                         <ul class="risk-list">
                             <?php foreach ($riskData as $risk): ?>
                             <li>
-                                <span class="badge badge-<?php echo strtolower($risk['severity']); ?>">
-                                    <?php echo ucfirst($risk['severity']); ?>
+                                <span class="badge badge-<?php echo htmlspecialchars(strtolower($risk['severity'])); ?>">
+                                    <?php echo htmlspecialchars(ucfirst($risk['severity'])); ?>
                                 </span>
-                                <span><?php echo $risk['count']; ?> incidents</span>
+                                <span><?php echo htmlspecialchars($risk['count']); ?> incidents</span>
                             </li>
                             <?php endforeach; ?>
                         </ul>
+                        <?php else: ?>
+                        <p>No incident data available.</p>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -80,8 +125,8 @@ $locationsAtRisk = executeQuery("
                         <ul class="location-risk-list">
                             <?php foreach ($locationsAtRisk as $location): ?>
                             <li>
-                                <strong><?php echo sanitize($location['location_name']); ?></strong>
-                                <span class="badge badge-danger"><?php echo $location['incident_count']; ?> incidents</span>
+                                <strong><?php echo htmlspecialchars($location['location_name']); ?></strong>
+                                <span class="badge badge-danger"><?php echo htmlspecialchars($location['incident_count']); ?> incidents</span>
                             </li>
                             <?php endforeach; ?>
                         </ul>

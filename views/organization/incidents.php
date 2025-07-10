@@ -16,6 +16,9 @@ if (!$organization) {
     redirect(SITE_URL);
 }
 
+// Initialize incidents array
+$incidents = [];
+
 // Get all incidents at this organization's locations
 $query = "SELECT i.*, l.name as location_name, u.name as reporter_name, u.role as reporter_role
           FROM incidents i 
@@ -23,13 +26,29 @@ $query = "SELECT i.*, l.name as location_name, u.name as reporter_name, u.role a
           JOIN users u ON i.reported_by = u.id 
           WHERE l.user_id = ? 
           ORDER BY i.incident_time DESC";
-$incidents = executeQuery($query, [$organization['id']]);
+$result = executeQuery($query, [$organization['id']]);
+
+if ($result !== false) {
+    $incidents = $result;
+}
 
 // Get incident statistics
 $totalIncidents = count($incidents);
-$openIncidents = count(array_filter($incidents, function($i) { return in_array($i['status'], ['reported', 'investigating']); }));
-$resolvedIncidents = count(array_filter($incidents, function($i) { return $i['status'] === 'resolved'; }));
-$criticalIncidents = count(array_filter($incidents, function($i) { return in_array($i['severity'], ['high', 'critical']); }));
+$openIncidents = 0;
+$resolvedIncidents = 0;
+$criticalIncidents = 0;
+
+foreach ($incidents as $incident) {
+    if (in_array($incident['status'], ['reported', 'investigating'])) {
+        $openIncidents++;
+    }
+    if ($incident['status'] === 'resolved') {
+        $resolvedIncidents++;
+    }
+    if (in_array($incident['severity'], ['high', 'critical'])) {
+        $criticalIncidents++;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -37,7 +56,7 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Incidents | <?php echo SITE_NAME; ?></title>
+    <title>Incidents | <?php echo htmlspecialchars(SITE_NAME, ENT_QUOTES, 'UTF-8'); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../../assets/css/styles.css">
     <link rel="stylesheet" href="../../assets/css/dashboard.css">
@@ -64,7 +83,7 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                             <i data-lucide="file-text"></i>
                         </div>
                         <div class="stat-details">
-                            <h3><?php echo $totalIncidents; ?></h3>
+                            <h3><?php echo htmlspecialchars($totalIncidents, ENT_QUOTES, 'UTF-8'); ?></h3>
                             <p>Total Incidents</p>
                         </div>
                     </div>
@@ -74,7 +93,7 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                             <i data-lucide="clock"></i>
                         </div>
                         <div class="stat-details">
-                            <h3><?php echo $openIncidents; ?></h3>
+                            <h3><?php echo htmlspecialchars($openIncidents, ENT_QUOTES, 'UTF-8'); ?></h3>
                             <p>Open Incidents</p>
                         </div>
                     </div>
@@ -84,7 +103,7 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                             <i data-lucide="check-circle"></i>
                         </div>
                         <div class="stat-details">
-                            <h3><?php echo $resolvedIncidents; ?></h3>
+                            <h3><?php echo htmlspecialchars($resolvedIncidents, ENT_QUOTES, 'UTF-8'); ?></h3>
                             <p>Resolved</p>
                         </div>
                     </div>
@@ -94,7 +113,7 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                             <i data-lucide="alert-triangle"></i>
                         </div>
                         <div class="stat-details">
-                            <h3><?php echo $criticalIncidents; ?></h3>
+                            <h3><?php echo htmlspecialchars($criticalIncidents, ENT_QUOTES, 'UTF-8'); ?></h3>
                             <p>High Priority</p>
                         </div>
                     </div>
@@ -119,12 +138,16 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                                 <option value="high">High</option>
                                 <option value="critical">Critical</option>
                             </select>
+                            <?php if (!empty($incidents)): ?>
                             <select id="locationFilter" class="form-control" style="width: auto; display: inline-block;">
                                 <option value="">All Locations</option>
-                                <?php foreach (array_unique(array_column($incidents, 'location_name')) as $location): ?>
-                                <option value="<?php echo $location; ?>"><?php echo sanitize($location); ?></option>
+                                <?php 
+                                $locations = array_unique(array_column($incidents, 'location_name'));
+                                foreach ($locations as $location): ?>
+                                <option value="<?php echo htmlspecialchars($location, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($location, ENT_QUOTES, 'UTF-8'); ?></option>
                                 <?php endforeach; ?>
                             </select>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="card-body">
@@ -132,57 +155,57 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                             <div class="incidents-list">
                                 <?php foreach ($incidents as $incident): ?>
                                 <div class="incident-card" 
-                                     data-status="<?php echo $incident['status']; ?>" 
-                                     data-severity="<?php echo $incident['severity']; ?>"
-                                     data-location="<?php echo $incident['location_name']; ?>">
+                                     data-status="<?php echo htmlspecialchars($incident['status'], ENT_QUOTES, 'UTF-8'); ?>" 
+                                     data-severity="<?php echo htmlspecialchars($incident['severity'], ENT_QUOTES, 'UTF-8'); ?>"
+                                     data-location="<?php echo htmlspecialchars($incident['location_name'], ENT_QUOTES, 'UTF-8'); ?>">
                                     <div class="incident-header">
                                         <div class="incident-title">
-                                            <h3><?php echo sanitize($incident['title']); ?></h3>
+                                            <h3><?php echo htmlspecialchars($incident['title'], ENT_QUOTES, 'UTF-8'); ?></h3>
                                             <div class="incident-meta">
                                                 <span class="incident-location">
                                                     <i data-lucide="map-pin"></i>
-                                                    <?php echo sanitize($incident['location_name']); ?>
+                                                    <?php echo htmlspecialchars($incident['location_name'], ENT_QUOTES, 'UTF-8'); ?>
                                                 </span>
                                                 <span class="incident-reporter">
                                                     <i data-lucide="user"></i>
-                                                    <?php echo sanitize($incident['reporter_name']); ?> (<?php echo ucfirst($incident['reporter_role']); ?>)
+                                                    <?php echo htmlspecialchars($incident['reporter_name'], ENT_QUOTES, 'UTF-8'); ?> (<?php echo htmlspecialchars(ucfirst($incident['reporter_role']), ENT_QUOTES, 'UTF-8'); ?>)
                                                 </span>
                                                 <span class="incident-date">
                                                     <i data-lucide="calendar"></i>
-                                                    <?php echo formatDate($incident['incident_time']); ?>
+                                                    <?php echo htmlspecialchars(formatDate($incident['incident_time']), ENT_QUOTES, 'UTF-8'); ?>
                                                 </span>
                                             </div>
                                         </div>
                                         <div class="incident-badges">
-                                            <span class="badge badge-<?php echo getSeverityClass($incident['severity']); ?>">
-                                                <?php echo ucfirst($incident['severity']); ?>
+                                            <span class="badge badge-<?php echo htmlspecialchars(getSeverityClass($incident['severity']), ENT_QUOTES, 'UTF-8'); ?>">
+                                                <?php echo htmlspecialchars(ucfirst($incident['severity']), ENT_QUOTES, 'UTF-8'); ?>
                                             </span>
-                                            <span class="badge badge-<?php echo getStatusClass($incident['status']); ?>">
-                                                <?php echo ucfirst($incident['status']); ?>
+                                            <span class="badge badge-<?php echo htmlspecialchars(getStatusClass($incident['status']), ENT_QUOTES, 'UTF-8'); ?>">
+                                                <?php echo htmlspecialchars(ucfirst($incident['status']), ENT_QUOTES, 'UTF-8'); ?>
                                             </span>
                                         </div>
                                     </div>
                                     
                                     <div class="incident-body">
-                                        <p><?php echo sanitize($incident['description']); ?></p>
+                                        <p><?php echo htmlspecialchars($incident['description'], ENT_QUOTES, 'UTF-8'); ?></p>
                                     </div>
                                     
                                     <div class="incident-footer">
                                         <div class="incident-actions">
-                                            <button class="btn btn-sm btn-outline" onclick="viewIncident(<?php echo $incident['id']; ?>)">
+                                            <button class="btn btn-sm btn-outline" onclick="viewIncident(<?php echo htmlspecialchars($incident['id'], ENT_QUOTES, 'UTF-8'); ?>)">
                                                 <i data-lucide="eye"></i> View Details
                                             </button>
                                             <?php if ($incident['latitude'] && $incident['longitude']): ?>
-                                            <button class="btn btn-sm btn-secondary" onclick="viewLocation(<?php echo $incident['latitude']; ?>, <?php echo $incident['longitude']; ?>)">
+                                            <button class="btn btn-sm btn-secondary" onclick="viewLocation(<?php echo htmlspecialchars($incident['latitude'], ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars($incident['longitude'], ENT_QUOTES, 'UTF-8'); ?>)">
                                                 <i data-lucide="map-pin"></i> View Location
                                             </button>
                                             <?php endif; ?>
-                                            <button class="btn btn-sm btn-primary" onclick="downloadReport(<?php echo $incident['id']; ?>)">
+                                            <button class="btn btn-sm btn-primary" onclick="downloadReport(<?php echo htmlspecialchars($incident['id'], ENT_QUOTES, 'UTF-8'); ?>)">
                                                 <i data-lucide="download"></i> Report
                                             </button>
                                         </div>
                                         <div class="incident-time">
-                                            Reported <?php echo getTimeAgo($incident['created_at']); ?>
+                                            Reported <?php echo htmlspecialchars(getTimeAgo($incident['created_at']), ENT_QUOTES, 'UTF-8'); ?>
                                         </div>
                                     </div>
                                 </div>
@@ -213,8 +236,12 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                                 <div class="trend-value">
                                     <?php 
                                     $severities = array_count_values(array_column($incidents, 'severity'));
-                                    $mostCommon = array_keys($severities, max($severities))[0];
-                                    echo ucfirst($mostCommon);
+                                    if (!empty($severities)) {
+                                        $mostCommon = array_keys($severities, max($severities))[0];
+                                        echo htmlspecialchars(ucfirst($mostCommon), ENT_QUOTES, 'UTF-8');
+                                    } else {
+                                        echo 'N/A';
+                                    }
                                     ?>
                                 </div>
                             </div>
@@ -226,7 +253,7 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                                     $locations = array_count_values(array_column($incidents, 'location_name'));
                                     if (!empty($locations)) {
                                         $mostAffected = array_keys($locations, max($locations))[0];
-                                        echo sanitize($mostAffected);
+                                        echo htmlspecialchars($mostAffected, ENT_QUOTES, 'UTF-8');
                                     } else {
                                         echo 'N/A';
                                     }
@@ -237,7 +264,7 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                             <div class="trend-item">
                                 <div class="trend-label">Resolution Rate</div>
                                 <div class="trend-value">
-                                    <?php echo $totalIncidents > 0 ? round(($resolvedIncidents / $totalIncidents) * 100, 1) : 0; ?>%
+                                    <?php echo $totalIncidents > 0 ? htmlspecialchars(round(($resolvedIncidents / $totalIncidents) * 100, 1), ENT_QUOTES, 'UTF-8') : 0; ?>%
                                 </div>
                             </div>
                             
@@ -245,10 +272,13 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
                                 <div class="trend-label">This Month</div>
                                 <div class="trend-value">
                                     <?php 
-                                    $thisMonth = count(array_filter($incidents, function($i) {
-                                        return date('Y-m', strtotime($i['incident_time'])) === date('Y-m');
-                                    }));
-                                    echo $thisMonth;
+                                    $thisMonth = 0;
+                                    foreach ($incidents as $incident) {
+                                        if (date('Y-m', strtotime($incident['incident_time'])) === date('Y-m')) {
+                                            $thisMonth++;
+                                        }
+                                    }
+                                    echo htmlspecialchars($thisMonth, ENT_QUOTES, 'UTF-8');
                                     ?>
                                 </div>
                             </div>
@@ -260,6 +290,7 @@ $criticalIncidents = count(array_filter($incidents, function($i) { return in_arr
         </main>
     </div>
 
+    <!-- [Rest of your CSS and JavaScript remains the same] -->
     <style>
     .card-actions {
         display: flex;

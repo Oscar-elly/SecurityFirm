@@ -52,6 +52,7 @@ if ($attendanceStats === false) {
 }
 
 // Location incident distribution for organization
+// Location incident distribution for organization
 $locationIncidents = executeQuery("
     SELECT l.name as location_name,
            COUNT(i.id) as incident_count
@@ -61,7 +62,7 @@ $locationIncidents = executeQuery("
     GROUP BY l.id, l.name
     ORDER BY incident_count DESC
     LIMIT 10
-", [$organizationId]);
+", [$organizationId]) ?: [];
 
 if ($locationIncidents === false) {
     $locationIncidents = [];
@@ -233,35 +234,38 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                                         <th>Risk Level</th>
                                     </tr>
                                 </thead>
-                <tbody>
-                    <?php 
-                    if (is_array($locationIncidents)) {
-                        foreach ($locationIncidents as $location): ?>
-                        <tr>
-                            <td><?php echo sanitize($location['location_name']); ?></td>
-                            <td><?php echo $location['incident_count']; ?></td>
-                            <td>
-                                <?php 
-                                $riskLevel = 'Low';
-                                $riskClass = 'success';
-                                if ($location['incident_count'] > 10) {
-                                    $riskLevel = 'High';
-                                    $riskClass = 'danger';
-                                } elseif ($location['incident_count'] > 5) {
-                                    $riskLevel = 'Medium';
-                                    $riskClass = 'warning';
-                                }
-                                ?>
-                                <span class="badge badge-<?php echo $riskClass; ?>"><?php echo $riskLevel; ?></span>
-                            </td>
-                        </tr>
-                    <?php 
-                        endforeach; 
-                    } else {
-                        echo '<tr><td colspan="3">No data available</td></tr>';
-                    }
-                    ?>
-                </tbody>
+                                <tbody>
+                                    <?php 
+                                    if (is_array($locationIncidents) && !empty($locationIncidents)) {
+                                        foreach ($locationIncidents as $location): 
+                                            // Ensure we have valid data before trying to access array elements
+                                            $locationName = isset($location['name']) ? sanitize($location['name']) : 'Unknown Location';
+                                            $incidentCount = isset($location['incident_count']) ? (int)$location['incident_count'] : 0;
+                                            ?>
+                                            <tr>
+                                                <td><?php echo $locationName; ?></td>
+                                                <td><?php echo $incidentCount; ?></td>
+                                                <td>
+                                                    <?php 
+                                                    $riskLevel = 'Low';
+                                                    $riskClass = 'success';
+                                                    if ($incidentCount > 10) {
+                                                        $riskLevel = 'High';
+                                                        $riskClass = 'danger';
+                                                    } elseif ($incidentCount > 5) {
+                                                        $riskLevel = 'Medium';
+                                                        $riskClass = 'warning';
+                                                    }
+                                                    ?>
+                                                    <span class="badge badge-<?php echo $riskClass; ?>"><?php echo $riskLevel; ?></span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; 
+                                    } else {
+                                        echo '<tr><td colspan="3">No data available</td></tr>';
+                                    }
+                                    ?>
+                                </tbody>
                             </table>
                         </div>
                     </div>

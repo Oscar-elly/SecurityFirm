@@ -316,6 +316,7 @@ textarea {
     border-radius: var(--border-radius-md);
     box-shadow: var(--shadow-md);
     overflow: hidden;
+    margin-bottom: 2rem; 
 }
 
 .card-header {
@@ -326,6 +327,7 @@ textarea {
 
 .card-body {
     padding: var(--space-lg);
+    padding: 1.5rem;
 }
 
 .card-footer {

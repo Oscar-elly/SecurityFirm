@@ -46,24 +46,49 @@ function getUnreadNotificationsCount() {
 function getRecentNotifications($limit = 5) {
     global $conn;
     
-    $userId = $_SESSION['user_id'];
-    $query = "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?";
+    // Validate session and user_id
+    if (session_status() !== PHP_SESSION_ACTIVE || !isset($_SESSION['user_id'])) {
+        return [];
+    }
     
-    $stmt = $conn->prepare($query);
-    if ($stmt) {
-        $stmt->bind_param("ii", $userId, $limit);
-        $stmt->execute();
-        $result = $stmt->get_result();
+    $userId = $_SESSION['user_id'];
+    
+    // Validate limit
+    $limit = filter_var($limit, FILTER_VALIDATE_INT, [
+        'options' => ['min_range' => 1]
+    ]);
+    if ($limit === false) {
+        $limit = 5; // default value if invalid
+    }
+    
+    $query = "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?";
+    $notifications = [];
+    
+    try {
+        $stmt = $conn->prepare($query);
+        if (!$stmt) {
+            // Log error or handle it appropriately
+            return [];
+        }
         
-        $notifications = [];
+        $stmt->bind_param("ii", $userId, $limit);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+        
+        $result = $stmt->get_result();
         while ($row = $result->fetch_assoc()) {
             $notifications[] = $row;
         }
         
-        return $notifications;
+        $stmt->close();
+    } catch (Exception $e) {
+        // Log the error if needed
+        return [];
     }
     
-    return [];
+    return $notifications;
 }
 
 /**

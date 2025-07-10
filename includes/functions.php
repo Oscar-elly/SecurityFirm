@@ -16,7 +16,17 @@ function executeQuery($query, $params = [], $options = []) {
 
     // Bind parameters if any
     if (!empty($params)) {
-        $types = str_repeat('s', count($params)); // auto-detect all as strings
+        // Detect parameter types: i for integer, d for double, s for string
+        $types = '';
+        foreach ($params as $param) {
+            if (is_int($param)) {
+                $types .= 'i';
+            } elseif (is_float($param)) {
+                $types .= 'd';
+            } else {
+                $types .= 's';
+            }
+        }
         $stmt->bind_param($types, ...$params);
     }
 
@@ -320,4 +330,30 @@ function sendSMS($recipients, $message) {
         error_log("Africa's Talking SMS unexpected response: " . $response);
         return false;
     }
+}
+function getOrganizationId($userId) {
+    global $conn;
+    
+    error_log("Debug: Starting getOrganizationId for user $userId"); // Debug line
+    
+    $query = "SELECT id FROM organizations WHERE user_id = ?";
+    $stmt = $conn->prepare($query);
+    
+    if (!$stmt) {
+        error_log("Error preparing query: " . $conn->error);
+        return false;
+    }
+    
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        error_log("Debug: Found organization ID " . $row['id'] . " for user $userId"); // Debug line
+        return $row['id'];
+    }
+    
+    error_log("Error: No organization found for user $userId");
+    return false;
 }

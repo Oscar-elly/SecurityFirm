@@ -4,7 +4,7 @@
             <h2>SecureConnect</h2>
             <span>Kenya</span>
         </div>
-        <button id="sidebar-toggle" class="sidebar-toggle">
+        <button id="mobile-sidebar-toggle" class="sidebar-toggle">
             <i data-lucide="menu"></i>
         </button>
     </div>
