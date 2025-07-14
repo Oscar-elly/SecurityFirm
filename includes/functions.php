@@ -357,3 +357,211 @@ function getOrganizationId($userId) {
     error_log("Error: No organization found for user $userId");
     return false;
 }
+// In functions.php
+function executeQuery1($query, $params = [], $options = []) {
+    global $conn;
+    
+    // Debug logging
+    error_log("Executing query: " . $query);
+    
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        error_log("Prepare failed: " . $conn->error);
+        return false;
+    }
+    
+    if (!empty($params)) {
+        $types = str_repeat('s', count($params));
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    if (!$stmt->execute()) {
+        error_log("Execute failed: " . $stmt->error);
+        return false;
+    }
+    
+    // For SELECT queries
+    if ($result = $stmt->get_result()) {
+        $data = [];
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
+        return $data;
+    }
+    // For INSERT/UPDATE/DELETE
+    else {
+        return [
+            'affected_rows' => $stmt->affected_rows,
+            'insert_id' => $stmt->insert_id
+        ];
+    }
+}
+
+/**
+ * Enhanced database query execution function with parameter binding
+ * 
+ * @param string $query The SQL query with ? placeholders
+ * @param array $params Array of parameters to bind
+ * @param array $options Additional options:
+ *        - 'single' => bool: Return single row if true
+ *        - 'debug' => bool: Return error details if true
+ * @return array|false Returns result array or false on failure
+ */
+function executeQuery2($query, $params = [], $options = []) {
+    global $conn;
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        error_log("Prepare failed: " . $conn->error);
+        return false;
+    }
+
+    if (!empty($params)) {
+        $types = str_repeat('s', count($params));
+        if (!$stmt->bind_param($types, ...$params)) {
+            error_log("Bind failed: " . $stmt->error);
+            return false;
+        }
+    }
+
+    if (!$stmt->execute()) {
+        error_log("Execute failed: " . $stmt->error);
+        return false;
+    }
+
+    $result = $stmt->get_result();
+    if (!$result) {
+        error_log("Get result failed: " . $stmt->error);
+        return false;
+    }
+
+    if ($options['single'] ?? false) {
+        return $result->fetch_assoc();
+    }
+    
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+function executeQuerr($query, $params = [], $options = []) {
+    global $conn;
+    
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        error_log("Prepare failed: " . $conn->error);
+        return false;
+    }
+
+    try {
+        if (!empty($params)) {
+            // Auto-detect parameter types
+            $types = '';
+            foreach ($params as $param) {
+                if (is_int($param)) {
+                    $types .= 'i';
+                } elseif (is_float($param)) {
+                    $types .= 'd';
+                } elseif (is_string($param)) {
+                    $types .= 's';
+                } else {
+                    $types .= 'b'; // blob for other types
+                }
+            }
+            
+            if (!$stmt->bind_param($types, ...$params)) {
+                error_log("Bind failed: " . $stmt->error);
+                return false;
+            }
+        }
+
+        if (!$stmt->execute()) {
+            error_log("Execute failed: " . $stmt->error);
+            return false;
+        }
+
+        // Check if this is a SELECT query
+        $query_type = strtolower(trim(substr($query, 0, 6)));
+        
+        if ($query_type === 'select') {
+            $result = $stmt->get_result();
+            if (!$result) {
+                error_log("Get result failed: " . $stmt->error);
+                return false;
+            }
+
+            if ($options['single'] ?? false) {
+                return $result->fetch_assoc();
+            }
+            
+            return $result->fetch_all(MYSQLI_ASSOC);
+        } else {
+            // For INSERT, UPDATE, DELETE queries
+            $affected_rows = $stmt->affected_rows;
+            $insert_id = $conn->insert_id;
+            
+            return [
+                'affected_rows' => $affected_rows,
+                'insert_id' => $insert_id,
+                'success' => true
+            ];
+        }
+        
+    } finally {
+        // Always close the statement
+        $stmt->close();
+    }
+}
+
+// Alternative version with explicit type specification
+function executeQuerry($query, $params = [], $types = '', $options = []) {
+    global $conn;
+    
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        error_log("Prepare failed: " . $conn->error);
+        return false;
+    }
+
+    try {
+        if (!empty($params)) {
+            // Use provided types or auto-detect
+            if (empty($types)) {
+                $types = str_repeat('s', count($params));
+            }
+            
+            if (!$stmt->bind_param($types, ...$params)) {
+                error_log("Bind failed: " . $stmt->error);
+                return false;
+            }
+        }
+
+        if (!$stmt->execute()) {
+            error_log("Execute failed: " . $stmt->error);
+            return false;
+        }
+
+        // Check if this is a SELECT query
+        if ($stmt->result_metadata()) {
+            $result = $stmt->get_result();
+            if (!$result) {
+                error_log("Get result failed: " . $stmt->error);
+                return false;
+            }
+
+            if ($options['single'] ?? false) {
+                return $result->fetch_assoc();
+            }
+            
+            return $result->fetch_all(MYSQLI_ASSOC);
+        } else {
+            // For non-SELECT queries
+            return [
+                'affected_rows' => $stmt->affected_rows,
+                'insert_id' => $conn->insert_id,
+                'success' => true
+            ];
+        }
+        
+    } finally {
+        $stmt->close();
+    }
+}
+

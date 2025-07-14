@@ -6,98 +6,139 @@ require_once '../../includes/db.php';
 
 requireRole('organization');
 
-$organizationId = $_SESSION['user_id'] ?? null;
+// Get organization details
+$orgRow = executeQuery("SELECT id, user_id FROM organizations WHERE user_id = ?", [$_SESSION['user_id']], ['single' => true]);
+$organizationId = $orgRow['id'] ?? null;
+$orgUserId = $orgRow['user_id'] ?? null;
 
-if (!$organizationId) {
-    header('Location: ../login.php');
-    exit;
+if (!$organizationId || !$orgUserId) {
+    die('Organization not found for current user.');
 }
 
-// Monthly incident trends for organization
+// 1. Incident Trends - FIXED
 $incidentTrends = executeQuery("
-    SELECT DATE_FORMAT(incident_time, '%Y-%m') as month, 
-           COUNT(*) as count,
-           severity
-    FROM incidents 
-    WHERE organization_id = ? AND incident_time >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-    GROUP BY DATE_FORMAT(incident_time, '%Y-%m'), severity
+    SELECT 
+        DATE_FORMAT(i.incident_time, '%Y-%m') AS month,
+        COUNT(*) AS count,
+        i.severity
+    FROM incidents i
+    JOIN locations l ON i.location_id = l.id
+    WHERE l.user_id = ?
+    GROUP BY DATE_FORMAT(i.incident_time, '%Y-%m'), i.severity
     ORDER BY month DESC
-", [$organizationId]);
+", [$orgUserId]) ?: [];
 
-// Guard performance analytics for organization
+// 2. Guard Performance - FIXED (assumes guards work at organization's locations)
 $guardPerformance = executeQuery("
-    SELECT AVG(overall_rating) as avg_rating,
-           COUNT(*) as total_evaluations,
-           MONTH(evaluation_date) as month
+    SELECT 
+        AVG(pe.overall_rating) as avg_rating,
+        COUNT(*) as total_evaluations,
+        MONTH(pe.evaluation_date) as month
     FROM performance_evaluations pe
     JOIN guards g ON pe.guard_id = g.id
-    WHERE g.organization_id = ? AND evaluation_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-    GROUP BY MONTH(evaluation_date)
+    JOIN duty_assignments da ON g.id = da.guard_id
+    JOIN locations l ON da.location_id = l.id
+    WHERE l.user_id = ? AND pe.evaluation_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    GROUP BY MONTH(pe.evaluation_date)
     ORDER BY month
-", [$organizationId]);
+", [$orgUserId]) ?: [];
 
-// Attendance analytics for organization
+// 3. Attendance Analytics - FIXED
 $attendanceStats = executeQuery("
-    SELECT status, COUNT(*) as count,
-           ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM attendance a JOIN duty_assignments da ON a.duty_assignment_id = da.id JOIN guards g ON da.guard_id = g.id WHERE g.organization_id = ?)), 2) as percentage
+    SELECT 
+        a.status, 
+        COUNT(*) as count,
+        ROUND((COUNT(*) * 100.0 / (
+            SELECT COUNT(*) 
+            FROM attendance a2
+            JOIN duty_assignments da2 ON a2.duty_assignment_id = da2.id
+            JOIN locations l2 ON da2.location_id = l2.id
+            WHERE l2.user_id = ? AND a2.check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        )), 2) as percentage
     FROM attendance a
     JOIN duty_assignments da ON a.duty_assignment_id = da.id
-    JOIN guards g ON da.guard_id = g.id
-    WHERE g.organization_id = ? AND check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    GROUP BY status
-", [$organizationId, $organizationId]);
+    JOIN locations l ON da.location_id = l.id
+    WHERE l.user_id = ? AND a.check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    GROUP BY a.status
+", [$orgUserId, $orgUserId]) ?: [];
 
-if ($attendanceStats === false) {
-    $attendanceStats = [];
-}
-
-// Location incident distribution for organization
-// Location incident distribution for organization
+// 4. Location Incidents - FIXED
 $locationIncidents = executeQuery("
-    SELECT l.name as location_name,
-           COUNT(i.id) as incident_count
+    SELECT 
+        l.name as location_name,
+        COUNT(i.id) as incident_count
     FROM locations l
     LEFT JOIN incidents i ON l.id = i.location_id
-    WHERE l.organization_id = ?
+    WHERE l.user_id = ?
     GROUP BY l.id, l.name
     ORDER BY incident_count DESC
     LIMIT 10
-", [$organizationId]) ?: [];
+", [$orgUserId]) ?: [];
 
-if ($locationIncidents === false) {
-    $locationIncidents = [];
-}
-
-// Response time analytics for organization
+// 5. Response Time Analytics - FIXED
 $responseTimeData = executeQuery("
-    SELECT severity,
-           AVG(TIMESTAMPDIFF(HOUR, created_at, 
-               CASE 
-                   WHEN status = 'investigating' THEN updated_at
-                   WHEN status = 'resolved' THEN updated_at
-                   ELSE NOW()
-               END)) as avg_response_hours
-    FROM incidents 
-    WHERE organization_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    GROUP BY severity
-", [$organizationId]);
+    SELECT 
+        i.severity,
+        AVG(TIMESTAMPDIFF(HOUR, i.created_at, 
+            CASE 
+                WHEN i.status = 'investigating' THEN i.updated_at
+                WHEN i.status = 'resolved' THEN i.updated_at
+                ELSE NOW()
+            END)) as avg_response_hours
+    FROM incidents i
+    JOIN locations l ON i.location_id = l.id
+    WHERE l.user_id = ? AND i.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    GROUP BY i.severity
+", [$orgUserId]) ?: [];
 
-if ($responseTimeData === false) {
-    $responseTimeData = [];
-}
-
-// Guard utilization for organization
+// 6. Guard Utilization - FIXED
 $guardUtilization = executeQuery("
-    SELECT COUNT(DISTINCT da.guard_id) as active_guards,
-           (SELECT COUNT(*) FROM guards WHERE organization_id = ?) as total_guards,
-           ROUND((COUNT(DISTINCT da.guard_id) * 100.0 / (SELECT COUNT(*) FROM guards WHERE organization_id = ?)), 2) as utilization_rate
+    SELECT 
+        COUNT(DISTINCT da.guard_id) as active_guards,
+        (SELECT COUNT(DISTINCT da2.guard_id) 
+         FROM duty_assignments da2
+         JOIN locations l2 ON da2.location_id = l2.id
+         WHERE l2.user_id = ?) as total_guards,
+        ROUND((COUNT(DISTINCT da.guard_id) * 100.0 / 
+            (SELECT COUNT(DISTINCT da3.guard_id) 
+             FROM duty_assignments da3
+             JOIN locations l3 ON da3.location_id = l3.id
+             WHERE l3.user_id = ?)), 2) as utilization_rate
     FROM duty_assignments da
-    JOIN guards g ON da.guard_id = g.id
-    WHERE g.organization_id = ? AND da.status = 'active' 
+    JOIN locations l ON da.location_id = l.id
+    WHERE l.user_id = ? AND da.status = 'active' 
     AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())
-", [$organizationId, $organizationId, $organizationId]);
+", [$orgUserId, $orgUserId, $orgUserId]) ?: [];
 
 $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 0, 'utilization_rate' => 0];
+
+
+// Debug output
+echo '<div style="background:#f5f5f5;padding:20px;margin:20px;border:1px solid #ddd;">';
+echo '<h3>Debug Data - Organization ID: '.htmlspecialchars($organizationId).'</h3>';
+
+echo '<h4>$incidentTrends</h4>';
+echo '<pre>'.print_r($incidentTrends, true).'</pre>';
+
+echo '<h4>$guardPerformance</h4>';
+echo '<pre>'.print_r($guardPerformance, true).'</pre>';
+
+echo '<h4>$attendanceStats</h4>';
+echo '<pre>'.print_r($attendanceStats, true).'</pre>';
+
+echo '<h4>$locationIncidents</h4>';
+echo '<pre>'.print_r($locationIncidents, true).'</pre>';
+
+echo '<h4>$responseTimeData</h4>';
+echo '<pre>'.print_r($responseTimeData, true).'</pre>';
+
+echo '<h4>$guardUtilization</h4>';
+echo '<pre>'.print_r($guardUtilization, true).'</pre>';
+
+echo '<h4>$utilization</h4>';
+echo '<pre>'.print_r($utilization, true).'</pre>';
+
+echo '</div>';
 ?>
 
 <!DOCTYPE html>
@@ -300,102 +341,181 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
 
     <script>
         lucide.createIcons();
-        
+
+        // Helper function to safely parse JSON data
+        function safeParse(json) {
+            try {
+                const data = JSON.parse(json);
+                if (!Array.isArray(data)) {
+                    console.error('Expected array but got:', typeof data);
+                    return [];
+                }
+                return data;
+            } catch (e) {
+                console.error('JSON parse error:', e);
+                return [];
+            }
+        }
+
+        // Helper function to safely access array values
+        function safeGet(array, key, defaultValue = null) {
+            if (!Array.isArray(array)) return defaultValue;
+            return array.map(item => item[key] ?? defaultValue);
+        }
+
         // Incident Trends Chart
-        const incidentData = <?php echo json_encode($incidentTrends); ?>;
-        const incidentCtx = document.getElementById('incidentTrendsChart').getContext('2d');
-        new Chart(incidentCtx, {
-            type: 'line',
-            data: {
-                labels: [...new Set(incidentData.map(d => d.month))].sort(),
-                datasets: [{
-                    label: 'Total Incidents',
-                    data: incidentData.reduce((acc, curr) => {
-                        acc[curr.month] = (acc[curr.month] || 0) + parseInt(curr.count);
-                        return acc;
-                    }, {}),
-                    borderColor: '#1a237e',
-                    backgroundColor: 'rgba(26, 35, 126, 0.1)',
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
+        const incidentData = safeGet(<?php echo json_encode($incidentTrends); ?>);
+        const incidentCtx = document.getElementById('incidentTrendsChart')?.getContext('2d');
+        
+        if (incidentCtx) {
+            const incidentMonths = [...new Set(safeGet(incidentData, 'month', ''))].sort();
+            const incidentCounts = incidentMonths.map(month => {
+                return incidentData
+                    .filter(d => d.month === month)
+                    .reduce((sum, curr) => sum + parseInt(curr.count || 0), 0);
+            });
+
+            new Chart(incidentCtx, {
+                type: 'line',
+                data: {
+                    labels: incidentMonths,
+                    datasets: [{
+                        label: 'Total Incidents',
+                        data: incidentCounts,
+                        borderColor: '#1a237e',
+                        backgroundColor: 'rgba(26, 35, 126, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Incidents'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Month'
+                            }
+                        }
                     }
                 }
-            }
-        });
-        
+            });
+        }
+
         // Attendance Chart
-        const attendanceData = <?php echo json_encode($attendanceStats); ?>;
-        const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
-        new Chart(attendanceCtx, {
-            type: 'doughnut',
-            data: {
-                labels: attendanceData.map(d => d.status.charAt(0).toUpperCase() + d.status.slice(1)),
-                datasets: [{
-                    data: attendanceData.map(d => d.count),
-                    backgroundColor: ['#4caf50', '#ff9800', '#f44336', '#9e9e9e']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false
-            }
-        });
+        const attendanceData = safeParse(<?php echo json_encode($attendanceStats); ?>);
+        const attendanceCtx = document.getElementById('attendanceChart')?.getContext('2d');
         
+        if (attendanceCtx) {
+            const statusLabels = safeGet(attendanceData, 'status', 'unknown').map(
+                status => status.charAt(0).toUpperCase() + status.slice(1)
+            );
+            const statusCounts = safeGet(attendanceData, 'count', 0);
+
+            new Chart(attendanceCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: statusLabels,
+                    datasets: [{
+                        data: statusCounts,
+                        backgroundColor: ['#4caf50', '#ff9800', '#f44336', '#9e9e9e'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+        }
+
         // Performance Chart
-        const performanceData = <?php echo json_encode($guardPerformance); ?>;
-        const performanceCtx = document.getElementById('performanceChart').getContext('2d');
-        new Chart(performanceCtx, {
-            type: 'bar',
-            data: {
-                labels: performanceData.map(d => 'Month ' + d.month),
-                datasets: [{
-                    label: 'Average Rating',
-                    data: performanceData.map(d => d.avg_rating),
-                    backgroundColor: '#0288d1'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 5
-                    }
-                }
-            }
-        });
+        const performanceData = safeParse(<?php echo json_encode($guardPerformance); ?>);
+        const performanceCtx = document.getElementById('performanceChart')?.getContext('2d');
         
-        // Response Time Chart
-        const responseData = <?php echo json_encode($responseTimeData); ?>;
-        const responseCtx = document.getElementById('responseTimeChart').getContext('2d');
-        new Chart(responseCtx, {
-            type: 'bar',
-            data: {
-                labels: responseData.map(d => d.severity.charAt(0).toUpperCase() + d.severity.slice(1)),
-                datasets: [{
-                    label: 'Average Response Time (Hours)',
-                    data: responseData.map(d => d.avg_response_hours),
-                    backgroundColor: ['#4caf50', '#ff9800', '#f44336', '#9c27b0']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
+        if (performanceCtx) {
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const months = safeGet(performanceData, 'month', 1).map(m => monthNames[m-1] || `Month ${m}`);
+            const ratings = safeGet(performanceData, 'avg_rating', 0);
+
+            new Chart(performanceCtx, {
+                type: 'bar',
+                data: {
+                    labels: months,
+                    datasets: [{
+                        label: 'Average Rating',
+                        data: ratings,
+                        backgroundColor: '#0288d1',
+                        borderColor: '#01579b',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 5,
+                            title: {
+                                display: true,
+                                text: 'Rating (1-5)'
+                            }
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
+
+        // Response Time Chart
+        const responseData = safeParse(<?php echo json_encode($responseTimeData); ?>);
+        const responseCtx = document.getElementById('responseTimeChart')?.getContext('2d');
+        
+        if (responseCtx) {
+            const severities = safeGet(responseData, 'severity', 'unknown').map(
+                s => s.charAt(0).toUpperCase() + s.slice(1)
+            );
+            const responseTimes = safeGet(responseData, 'avg_response_hours', 0);
+
+            new Chart(responseCtx, {
+                type: 'bar',
+                data: {
+                    labels: severities,
+                    datasets: [{
+                        label: 'Avg Response Time (Hours)',
+                        data: responseTimes,
+                        backgroundColor: ['#4caf50', '#ff9800', '#f44336', '#9c27b0'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours'
+                            }
+                        }
+                    }
+                }
+            });
+        }
     </script>
 </body>
 </html>

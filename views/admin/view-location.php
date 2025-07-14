@@ -50,7 +50,6 @@ if (!$location) {
                 <div class="card-body">
                     <h2><?php echo sanitize($location['name']); ?></h2>
                     <p><strong>Address:</strong> <?php echo sanitize($location['address']); ?></p>
-                    <p><strong>Description:</strong> <?php echo nl2br(sanitize($location['description'])); ?></p>
                     <p><strong>Latitude:</strong> <?php echo sanitize($location['latitude']); ?></p>
                     <p><strong>Longitude:</strong> <?php echo sanitize($location['longitude']); ?></p>
                     <p><strong>Status:</strong> <?php echo ucfirst(sanitize($location['status'])); ?></p>

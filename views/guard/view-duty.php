@@ -227,7 +227,7 @@ $attendanceRecords = executeQuery($query, [$duty_id]);
     </div>
 
     <?php if ($duty['latitude'] && $duty['longitude']): ?>
-    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap" async defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCM-P8aABs132jn7dyh0sr6t3-bHx56BqE&callback=initMap" async defer></script>
     <script>
         let map;
         let dutyLocation = {

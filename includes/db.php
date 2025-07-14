@@ -85,6 +85,15 @@ class Database {
         }
     }
 }
+// After your db.php inclusion
+// global $conn;
+// if (!$conn) {
+//     die("Database connection failed completely");
+// }
+// if ($conn->connect_error) {
+//     die("Database connection error: " . $conn->connect_error);
+// }
+// echo "<p>Database connection successful. Server version: " . $conn->server_version . "</p>";
 
 // Usage example:
 // $db = new Database();

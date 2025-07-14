@@ -6,7 +6,7 @@ require_once '../../includes/db.php';
 
 requireRole('admin');
 
-$incidentTrends = executeQuery("
+$incidentTrends = executeQuery1("
     SELECT DATE_FORMAT(incident_time, '%Y-%m') as month, 
            COUNT(*) as count,
            severity
@@ -16,7 +16,7 @@ $incidentTrends = executeQuery("
     ORDER BY month DESC
 ");
 
-$guardPerformance = executeQuery("
+$guardPerformance = executeQuery1("
     SELECT AVG(overall_rating) as avg_rating,
            COUNT(*) as total_evaluations,
            MONTH(evaluation_date) as month
@@ -26,7 +26,7 @@ $guardPerformance = executeQuery("
     ORDER BY month
 ");
 
-$attendanceStats = executeQuery("
+$attendanceStats = executeQuery1("
     SELECT status, COUNT(*) as count,
            ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM attendance)), 2) as percentage
     FROM attendance 
@@ -34,7 +34,7 @@ $attendanceStats = executeQuery("
     GROUP BY status
 ");
 
-$locationIncidents = executeQuery("
+$locationIncidents = executeQuery1("
     SELECT l.name as location_name, o.name as organization_name,
            COUNT(i.id) as incident_count
     FROM locations l
@@ -45,7 +45,7 @@ $locationIncidents = executeQuery("
     LIMIT 10
 ");
 
-$responseTimeData = executeQuery("
+$responseTimeData = executeQuery1("
     SELECT severity,
            AVG(TIMESTAMPDIFF(HOUR, created_at, 
                CASE 
@@ -58,7 +58,7 @@ $responseTimeData = executeQuery("
     GROUP BY severity
 ");
 
-$guardUtilization = executeQuery("
+$guardUtilization = executeQuery1("
     SELECT COUNT(DISTINCT da.guard_id) as active_guards,
            (SELECT COUNT(*) FROM guards) as total_guards,
            ROUND((COUNT(DISTINCT da.guard_id) * 100.0 / (SELECT COUNT(*) FROM guards)), 2) as utilization_rate
@@ -68,6 +68,23 @@ $guardUtilization = executeQuery("
 ");
 
 $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 0, 'utilization_rate' => 0];
+// Debug output - add this before <!DOCTYPE html>
+// echo '<div style="background:#f5f5f5;padding:20px;margin:20px;border:1px solid #ddd;">';
+// echo '<h3>Debug Data</h3>';
+
+// echo '<h4>Incident Trends</h4>';
+// echo '<pre>'.print_r($incidentTrends, true).'</pre>';
+
+// echo '<h4>Guard Performance</h4>';
+// echo '<pre>'.print_r($guardPerformance, true).'</pre>';
+
+// echo '<h4>Attendance Stats</h4>';
+// echo '<pre>'.print_r($attendanceStats, true).'</pre>';
+
+// echo '<h4>Response Time Data</h4>';
+// echo '<pre>'.print_r($responseTimeData, true).'</pre>';
+
+// echo '</div>';
 ?>
 
 <!DOCTYPE html>
@@ -268,14 +285,19 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
         lucide.createIcons();
 
         // Helper function to safely parse JSON data
-        function safeParse(json) {
-            try {
-                return JSON.parse(json);
-            } catch (e) {
-                console.error('JSON parse error:', e);
+    function safeParse(json) {
+        try {
+            const data = JSON.parse(json);
+            if (!Array.isArray(data)) {
+                console.error('Expected array but got:', typeof data);
                 return [];
             }
+            return data;
+        } catch (e) {
+            console.error('JSON parse error:', e);
+            return [];
         }
+    }
 
         // Incident Trends Chart
         const incidentDataRaw = '<?php echo json_encode($incidentTrends); ?>';
