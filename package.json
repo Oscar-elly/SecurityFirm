@@ -1,8 +1,0 @@
-{
-  "name": "security-management-system",
-  "private": true,
-  "version": "1.0.0",
-  "scripts": {
-    "dev": "php -S localhost:3000"
-  }
-}

@@ -7,7 +7,7 @@ require_once '../../includes/db.php';
 requireRole('organization');
 
 // Get organization details
-$orgRow = executeQuery("SELECT id, user_id FROM organizations WHERE user_id = ?", [$_SESSION['user_id']], ['single' => true]);
+$orgRow = executequery2("SELECT id, user_id FROM organizations WHERE user_id = ?", [$_SESSION['user_id']], ['single' => true]);
 $organizationId = $orgRow['id'] ?? null;
 $orgUserId = $orgRow['user_id'] ?? null;
 
@@ -15,21 +15,21 @@ if (!$organizationId || !$orgUserId) {
     die('Organization not found for current user.');
 }
 
-// 1. Incident Trends - FIXED
-$incidentTrends = executeQuery("
+// 1. Incident Trends
+$incidentTrends = executequery2("
     SELECT 
         DATE_FORMAT(i.incident_time, '%Y-%m') AS month,
         COUNT(*) AS count,
         i.severity
     FROM incidents i
     JOIN locations l ON i.location_id = l.id
-    WHERE l.user_id = ?
+    WHERE l.organization_id = ?
     GROUP BY DATE_FORMAT(i.incident_time, '%Y-%m'), i.severity
     ORDER BY month DESC
-", [$orgUserId]) ?: [];
+", [$organizationId]) ?: [];
 
-// 2. Guard Performance - FIXED (assumes guards work at organization's locations)
-$guardPerformance = executeQuery("
+// 2. Guard Performance
+$guardPerformance = executequery2("
     SELECT 
         AVG(pe.overall_rating) as avg_rating,
         COUNT(*) as total_evaluations,
@@ -38,13 +38,13 @@ $guardPerformance = executeQuery("
     JOIN guards g ON pe.guard_id = g.id
     JOIN duty_assignments da ON g.id = da.guard_id
     JOIN locations l ON da.location_id = l.id
-    WHERE l.user_id = ? AND pe.evaluation_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    WHERE l.organization_id = ? AND pe.evaluation_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
     GROUP BY MONTH(pe.evaluation_date)
     ORDER BY month
-", [$orgUserId]) ?: [];
+", [$organizationId]) ?: [];
 
-// 3. Attendance Analytics - FIXED
-$attendanceStats = executeQuery("
+// 3. Attendance Analytics
+$attendanceStats = executequery2("
     SELECT 
         a.status, 
         COUNT(*) as count,
@@ -53,30 +53,30 @@ $attendanceStats = executeQuery("
             FROM attendance a2
             JOIN duty_assignments da2 ON a2.duty_assignment_id = da2.id
             JOIN locations l2 ON da2.location_id = l2.id
-            WHERE l2.user_id = ? AND a2.check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            WHERE l2.organization_id = ? AND a2.check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         )), 2) as percentage
     FROM attendance a
     JOIN duty_assignments da ON a.duty_assignment_id = da.id
     JOIN locations l ON da.location_id = l.id
-    WHERE l.user_id = ? AND a.check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    WHERE l.organization_id = ? AND a.check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     GROUP BY a.status
-", [$orgUserId, $orgUserId]) ?: [];
+", [$organizationId, $organizationId]) ?: [];
 
-// 4. Location Incidents - FIXED
-$locationIncidents = executeQuery("
+// 4. Location Incidents
+$locationIncidents = executequery2("
     SELECT 
         l.name as location_name,
         COUNT(i.id) as incident_count
     FROM locations l
     LEFT JOIN incidents i ON l.id = i.location_id
-    WHERE l.user_id = ?
+    WHERE l.organization_id = ?
     GROUP BY l.id, l.name
     ORDER BY incident_count DESC
     LIMIT 10
-", [$orgUserId]) ?: [];
+", [$organizationId]) ?: [];
 
-// 5. Response Time Analytics - FIXED
-$responseTimeData = executeQuery("
+// 5. Response Time Analytics
+$responseTimeData = executequery2("
     SELECT 
         i.severity,
         AVG(TIMESTAMPDIFF(HOUR, i.created_at, 
@@ -87,35 +87,37 @@ $responseTimeData = executeQuery("
             END)) as avg_response_hours
     FROM incidents i
     JOIN locations l ON i.location_id = l.id
-    WHERE l.user_id = ? AND i.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    WHERE l.organization_id = ? AND i.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     GROUP BY i.severity
-", [$orgUserId]) ?: [];
+", [$organizationId]) ?: [];
 
-// 6. Guard Utilization - FIXED
-$guardUtilization = executeQuery("
+// 6. Guard Utilization
+$guardUtilization = executequery2("
     SELECT 
         COUNT(DISTINCT da.guard_id) as active_guards,
         (SELECT COUNT(DISTINCT da2.guard_id) 
          FROM duty_assignments da2
          JOIN locations l2 ON da2.location_id = l2.id
-         WHERE l2.user_id = ?) as total_guards,
+         WHERE l2.organization_id = ?) as total_guards,
         ROUND((COUNT(DISTINCT da.guard_id) * 100.0 / 
             (SELECT COUNT(DISTINCT da3.guard_id) 
              FROM duty_assignments da3
              JOIN locations l3 ON da3.location_id = l3.id
-             WHERE l3.user_id = ?)), 2) as utilization_rate
+             WHERE l3.organization_id = ?)), 2) as utilization_rate
     FROM duty_assignments da
     JOIN locations l ON da.location_id = l.id
-    WHERE l.user_id = ? AND da.status = 'active' 
+    WHERE l.organization_id = ? AND da.status = 'active' 
     AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())
-", [$orgUserId, $orgUserId, $orgUserId]) ?: [];
+", [$organizationId, $organizationId, $organizationId]) ?: [];
 
 $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 0, 'utilization_rate' => 0];
-
 
 // Debug output
 echo '<div style="background:#f5f5f5;padding:20px;margin:20px;border:1px solid #ddd;">';
 echo '<h3>Debug Data - Organization ID: '.htmlspecialchars($organizationId).'</h3>';
+
+echo '<h4>$orgrows</h4>';
+echo '<pre>'.print_r($orgRow, true).'</pre>';
 
 echo '<h4>$incidentTrends</h4>';
 echo '<pre>'.print_r($incidentTrends, true).'</pre>';
@@ -364,7 +366,8 @@ echo '</div>';
         }
 
         // Incident Trends Chart
-        const incidentData = safeGet(<?php echo json_encode($incidentTrends); ?>);
+        const incidentDataRaw = '<?php echo json_encode($incidentTrends); ?>';
+        const incidentData = safeParse(incidentDataRaw);
         const incidentCtx = document.getElementById('incidentTrendsChart')?.getContext('2d');
         
         if (incidentCtx) {

@@ -357,7 +357,7 @@ function getOrganizationId($userId) {
     error_log("Error: No organization found for user $userId");
     return false;
 }
-// In functions.php
+
 function executeQuery1($query, $params = [], $options = []) {
     global $conn;
     
