@@ -2,10 +2,11 @@
 // Application Configuration
 
 // Database configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_HOST', 'dpg-d1sbn63uibrs73a8hhr0-a.oregon-postgres.render.com');
+define('DB_USER', 'prime');
+define('DB_PASS', 'IwTzQrop4iHhXGh5igSJ3McsoqyHSxSS');
 define('DB_NAME', 'security_management');
+define('DB_PORT', 5432);
 
 // Application settings
 define('SITE_NAME', 'SecureConnect Kenya');
