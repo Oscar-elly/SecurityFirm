@@ -17,6 +17,21 @@ $incidentTrends = executeQuery1("
 ");
 
 $guardPerformance = executeQuery1("
+    SELECT 
+        DATE_FORMAT(pe.evaluation_date, '%Y-%m') as month,
+        AVG(pe.punctuality) as avg_punctuality,
+        AVG(pe.appearance) as avg_appearance,
+        AVG(pe.communication) as avg_communication,
+        AVG(pe.job_knowledge) as avg_job_knowledge,
+        AVG(pe.overall_rating) as avg_overall_rating,
+        COUNT(*) as total_evaluations
+    FROM performance_evaluations pe
+    WHERE pe.evaluation_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    GROUP BY DATE_FORMAT(pe.evaluation_date, '%Y-%m')
+    ORDER BY month DESC
+");
+
+$guardPerformance1 = executeQuery1("
     SELECT AVG(overall_rating) as avg_rating,
            COUNT(*) as total_evaluations,
            MONTH(evaluation_date) as month
@@ -76,7 +91,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
 // echo '<pre>'.print_r($incidentTrends, true).'</pre>';
 
 // echo '<h4>Guard Performance</h4>';
-// echo '<pre>'.print_r($guardPerformance, true).'</pre>';
+// echo '<pre>'.print_r($guardPerformance1, true).'</pre>';
 
 // echo '<h4>Attendance Stats</h4>';
 // echo '<pre>'.print_r($attendanceStats, true).'</pre>';
@@ -129,7 +144,7 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                             <i data-lucide="trending-up"></i>
                         </div>
                         <div class="stat-details">
-                            <h3><?php echo !empty($guardPerformance) ? round(array_sum(array_column($guardPerformance, 'avg_rating')) / count($guardPerformance), 1) : 'N/A'; ?></h3>
+                            <h3><?php echo !empty($guardPerformance1) ? round(array_sum(array_column($guardPerformance1, 'avg_rating')) / count($guardPerformance1), 1) : 'N/A'; ?></h3>
                             <p>Avg Performance</p>
                         </div>
                     </div>
@@ -348,19 +363,45 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
             }
         });
 
-        // Performance Chart
+        // Performance Metrics Chart
         const performanceDataRaw = '<?php echo json_encode($guardPerformance); ?>';
         const performanceData = safeParse(performanceDataRaw);
         const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+
+        // Create datasets array in your exact style
+        const datasets = [
+            {
+                label: 'Punctuality',
+                data: performanceData.map(d => d.avg_punctuality),
+                backgroundColor: '#FF6384'
+            },
+            {
+                label: 'Appearance',
+                data: performanceData.map(d => d.avg_appearance),
+                backgroundColor: '#36A2EB'
+            },
+            {
+                label: 'Communication',
+                data: performanceData.map(d => d.avg_communication),
+                backgroundColor: '#FFCE56'
+            },
+            {
+                label: 'Job Knowledge',
+                data: performanceData.map(d => d.avg_job_knowledge),
+                backgroundColor: '#4BC0C0'
+            },
+            {
+                label: 'Overall Rating',
+                data: performanceData.map(d => d.avg_overall_rating),
+                backgroundColor: '#9966FF'
+            }
+        ];
+
         new Chart(performanceCtx, {
             type: 'bar',
             data: {
                 labels: performanceData.map(d => 'Month ' + d.month),
-                datasets: [{
-                    label: 'Average Rating',
-                    data: performanceData.map(d => d.avg_rating),
-                    backgroundColor: '#0288d1'
-                }]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -373,7 +414,6 @@ $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 
                 }
             }
         });
-
         // Response Time Chart
         const responseDataRaw = '<?php echo json_encode($responseTimeData); ?>';
         const responseData = safeParse(responseDataRaw);

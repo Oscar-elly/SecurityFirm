@@ -37,9 +37,6 @@ if ($organizationId === false || $organizationId <= 0) {
 error_log("Debug: User ID = " . $_SESSION['user_id']);
 error_log("Debug: Organization ID = " . $organizationId);
 
-// For immediate browser output (temporary):
-echo "<script>console.log('Organization ID:', " . json_encode($organizationId) . ")</script>";
-
 // Initialize all variables with default values
 $stats = [
     'incidents' => [
@@ -84,27 +81,31 @@ try {
         SUM(CASE WHEN i.severity IN ('high', 'critical') THEN 1 ELSE 0 END) as critical
         FROM incidents i
         JOIN locations l ON i.location_id = l.id
-        WHERE l.user_id = ?";
+        WHERE l.organization_id = ?";
     
-    $result = executeQuery($incidentStatsQuery, [$organizationId], ['single' => true]);
+    error_log("Incident Stats Query: " . $incidentStatsQuery);
+    $result = executeQuery2($incidentStatsQuery, [$organizationId], ['single' => true]);
     if ($result) {
         $stats['incidents'] = array_merge($stats['incidents'], $result);
+        error_log("Incident Stats Result: " . print_r($result, true));
     } else {
         error_log("Query failed: Incident Stats Query");
     }
 
     // 2. Guard Statistics
+    // 2. Guard Statistics - Updated Query
     $guardStatsQuery = "SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN u.status = 'active' THEN 1 ELSE 0 END) as active
         FROM guards g
         JOIN users u ON g.user_id = u.id
-        JOIN organizations o ON u.id = o.user_id
-        WHERE o.id = ?";
+        WHERE g.organization_id = ?";
     
-    $result = executeQuery($guardStatsQuery, [$organizationId], ['single' => true]);
+    error_log("Guard Stats Query: " . $guardStatsQuery);
+    $result = executeQuery2($guardStatsQuery, [$organizationId], ['single' => true]);
     if ($result) {
         $stats['guards'] = array_merge($stats['guards'], $result);
+        error_log("Guard Stats Result: " . print_r($result, true));
     } else {
         error_log("Query failed: Guard Stats Query");
     }
@@ -114,13 +115,13 @@ try {
         ROUND(AVG(pe.overall_rating), 1) as avg_rating
         FROM performance_evaluations pe
         JOIN guards g ON pe.guard_id = g.id
-        JOIN users u ON g.user_id = u.id
-        JOIN organizations o ON u.id = o.user_id
-        WHERE o.id = ?";
+        WHERE g.organization_id = ?";
     
-    $result = executeQuery($guardPerformanceQuery, [$organizationId], ['single' => true]);
+    error_log("Guard Performance Query: " . $guardPerformanceQuery);
+    $result = executeQuery2($guardPerformanceQuery, [$organizationId], ['single' => true]);
     if ($result && $result['avg_rating'] !== null) {
         $stats['guards']['avg_rating'] = $result['avg_rating'];
+        error_log("Guard Performance Result: " . print_r($result, true));
     } else {
         error_log("Query failed or no data: Guard Performance Query");
     }
@@ -132,11 +133,13 @@ try {
         SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
         SUM(number_of_guards) as guards_requested
         FROM guard_requests 
-        WHERE user_id = ?";
+        WHERE organization_id = ?";
     
-    $result = executeQuery($guardRequestsQuery, [$organizationId], ['single' => true]);
+    error_log("Guard Requests Query: " . $guardRequestsQuery);
+    $result = executeQuery2($guardRequestsQuery, [$organizationId], ['single' => true]);
     if ($result) {
         $stats['requests'] = array_merge($stats['requests'], $result);
+        error_log("Guard Requests Result: " . print_r($result, true));
     } else {
         error_log("Query failed: Guard Requests Query");
     }
@@ -146,14 +149,17 @@ try {
         severity, COUNT(*) as count
         FROM incidents i
         JOIN locations l ON i.location_id = l.id
-        WHERE l.user_id = ?
+        WHERE l.organization_id = ?
         GROUP BY severity
         ORDER BY FIELD(severity, 'critical', 'high', 'medium', 'low')";
     
-    $riskData = executeQuery($riskDataQuery, [$organizationId]);
+    error_log("Risk Data Query: " . $riskDataQuery);
+    $riskData = executeQuery2($riskDataQuery, [$organizationId]);
     if ($riskData === false) {
         error_log("Query failed: Risk Data Query");
         $riskData = [];
+    } else {
+        error_log("Risk Data Result: " . print_r($riskData, true));
     }
 
     // 6. Locations at Risk
@@ -162,44 +168,42 @@ try {
         COUNT(i.id) as incident_count
         FROM locations l
         LEFT JOIN incidents i ON l.id = i.location_id
-        WHERE l.user_id = ?
+        WHERE l.organization_id = ?
         GROUP BY l.id, l.name
         HAVING incident_count > 0
         ORDER BY incident_count DESC
         LIMIT 5";
     
-    $locationsAtRisk = executeQuery($locationsQuery, [$organizationId]);
+    error_log("Locations At Risk Query: " . $locationsQuery);
+    $locationsAtRisk = executeQuery2($locationsQuery, [$organizationId]);
     if ($locationsAtRisk === false) {
         error_log("Query failed: Locations At Risk Query");
         $locationsAtRisk = [];
+    } else {
+        error_log("Locations At Risk Result: " . print_r($locationsAtRisk, true));
     }
 
     // 7. Guard Utilization
-    $utilizationQuery = "SELECT 
-        COUNT(DISTINCT da.guard_id) as active,
-        (SELECT COUNT(*) FROM guards g 
-         JOIN users u ON g.user_id = u.id 
-         JOIN organizations o ON u.id = o.user_id 
-         WHERE o.id = ?) as total,
-        ROUND((COUNT(DISTINCT da.guard_id) * 100.0 / 
-        NULLIF((SELECT COUNT(*) FROM guards g 
-                JOIN users u ON g.user_id = u.id 
-                JOIN organizations o ON u.id = o.user_id 
-                WHERE o.id = ?), 0), 2) as rate
+    // 7. Guard Utilization - Updated Query
+    $guardUtilization = executequery2("
+        SELECT 
+            COUNT(DISTINCT da.guard_id) as active_guards,
+            (SELECT COUNT(DISTINCT da2.guard_id) 
+            FROM duty_assignments da2
+            JOIN locations l2 ON da2.location_id = l2.id
+            WHERE l2.organization_id = ?) as total_guards,
+            ROUND((COUNT(DISTINCT da.guard_id) * 100.0 / 
+                (SELECT COUNT(DISTINCT da3.guard_id) 
+                FROM duty_assignments da3
+                JOIN locations l3 ON da3.location_id = l3.id
+                WHERE l3.organization_id = ?)), 2) as utilization_rate
         FROM duty_assignments da
-        JOIN guards g ON da.guard_id = g.id
-        JOIN users u ON g.user_id = u.id
-        JOIN organizations o ON u.id = o.user_id
-        WHERE o.id = ? 
-        AND da.status = 'active'
-        AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())";
-    
-    $result = executeQuery($utilizationQuery, [$organizationId, $organizationId, $organizationId], ['single' => true]);
-    if ($result) {
-        $stats['utilization'] = array_merge($stats['utilization'], $result);
-    } else {
-        error_log("Query failed: Guard Utilization Query");
-    }
+        JOIN locations l ON da.location_id = l.id
+        WHERE l.organization_id = ? AND da.status = 'active' 
+        AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())
+    ", [$organizationId, $organizationId, $organizationId]) ?: [];
+
+    $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 0, 'utilization_rate' => 0];
 
     // 8. Attendance Stats
     $attendanceQuery = "SELECT 
@@ -209,23 +213,22 @@ try {
             FROM attendance a 
             JOIN duty_assignments da ON a.duty_assignment_id = da.id 
             JOIN guards g ON da.guard_id = g.id
-            JOIN users u ON g.user_id = u.id
-            JOIN organizations o ON u.id = o.user_id
-            WHERE o.id = ?
+            WHERE g.organization_id = ?
         ), 0)), 2) as percentage
         FROM attendance a
         JOIN duty_assignments da ON a.duty_assignment_id = da.id
         JOIN guards g ON da.guard_id = g.id
-        JOIN users u ON g.user_id = u.id
-        JOIN organizations o ON u.id = o.user_id
-        WHERE o.id = ? 
+        WHERE g.organization_id = ? 
         AND a.check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         GROUP BY status";
     
-    $attendanceResults = executeQuery($attendanceQuery, [$organizationId, $organizationId]);
+    error_log("Attendance Query: " . $attendanceQuery);
+    $attendanceResults = executeQuery2($attendanceQuery, [$organizationId, $organizationId]);
     if ($attendanceResults === false) {
         error_log("Query failed: Attendance Query");
         $attendanceResults = [];
+    } else {
+        error_log("Attendance Results: " . print_r($attendanceResults, true));
     }
     foreach ($attendanceResults as $row) {
         if ($row['status'] === 'present') {
@@ -242,20 +245,41 @@ try {
         i.severity, i.incident_time, i.status
         FROM incidents i
         JOIN locations l ON i.location_id = l.id
-        WHERE l.user_id = ?
+        WHERE l.organization_id = ?
         ORDER BY i.incident_time DESC
         LIMIT 5";
     
-    $recentReports = executeQuery($recentReportsQuery, [$organizationId]);
+    error_log("Recent Reports Query: " . $recentReportsQuery);
+    $recentReports = executeQuery2($recentReportsQuery, [$organizationId]);
     if ($recentReports === false) {
         error_log("Query failed: Recent Reports Query");
         $recentReports = [];
+    } else {
+        error_log("Recent Reports Result: " . print_r($recentReports, true));
     }
 
 } catch (Exception $e) {
     error_log("Dashboard error: " . $e->getMessage());
     $_SESSION['error'] = "Failed to load dashboard data. Please try again.";
 }
+
+// Debug output
+echo '<div style="background:#f5f5f5;padding:20px;margin:20px;border:1px solid #ddd;">';
+echo '<h3>Debug Data - Organization ID: '.htmlspecialchars($organizationId).'</h3>';
+
+echo '<h4>Stats</h4>';
+echo '<pre>'.print_r($stats, true).'</pre>';
+
+echo '<h4>Risk Data</h4>';
+echo '<pre>'.print_r($riskData, true).'</pre>';
+
+echo '<h4>Locations At Risk</h4>';
+echo '<pre>'.print_r($locationsAtRisk, true).'</pre>';
+
+echo '<h4>Recent Reports</h4>';
+echo '<pre>'.print_r($recentReports, true).'</pre>';
+
+echo '</div>';
 ?>
 
 <!DOCTYPE html>
@@ -405,7 +429,7 @@ try {
                             <i data-lucide="trending-up"></i>
                         </div>
                         <div class="stat-details">
-                            <h3><?php echo htmlspecialchars($stats['utilization']['rate'], ENT_QUOTES, 'UTF-8'); ?>%</h3>
+                            <h3><?php echo $utilization['utilization_rate']; ?>%</h3>
                             <p>Guard Utilization</p>
                         </div>
                     </div>

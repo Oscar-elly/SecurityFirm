@@ -24,7 +24,7 @@ $query = "SELECT i.*, l.name as location_name, u.name as reporter_name, u.role a
           FROM incidents i 
           JOIN locations l ON i.location_id = l.id 
           JOIN users u ON i.reported_by = u.id 
-          WHERE l.user_id = ? 
+          WHERE l.organization_id = ? 
           ORDER BY i.incident_time DESC";
 $result = executeQuery($query, [$organization['id']]);
 

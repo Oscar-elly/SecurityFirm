@@ -33,10 +33,11 @@ CREATE TABLE organizations (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Guards table
+-- Guards table (updated with organization_id)
 CREATE TABLE guards (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
+    organization_id INT NOT NULL,
     id_number VARCHAR(20) NOT NULL UNIQUE,
     date_of_birth DATE,
     gender ENUM('male', 'female', 'other'),
@@ -47,13 +48,14 @@ CREATE TABLE guards (
     qualification TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 );
 
--- Locations/Sites table
+-- Locations/Sites table (updated with organization_id)
 CREATE TABLE locations (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
+    organization_id INT NOT NULL,
     name VARCHAR(100) NOT NULL,
     address TEXT,
     latitude DECIMAL(10, 8),
@@ -63,7 +65,7 @@ CREATE TABLE locations (
     status ENUM('active', 'inactive') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES organizations(id) ON DELETE CASCADE
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 );
 
 -- Shifts table
@@ -142,10 +144,10 @@ CREATE TABLE incident_media (
     FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE
 );
 
--- Guard Requests table (from organizations)
+-- Guard Requests table (updated with organization_id)
 CREATE TABLE guard_requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
+    organization_id INT NOT NULL,
     location_id INT NOT NULL,
     number_of_guards INT NOT NULL,
     shift_id INT NOT NULL,
@@ -156,7 +158,7 @@ CREATE TABLE guard_requests (
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
     FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
     FOREIGN KEY (shift_id) REFERENCES shifts(id)
 );

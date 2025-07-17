@@ -28,8 +28,27 @@ $incidentTrends = executequery2("
     ORDER BY month DESC
 ", [$organizationId]) ?: [];
 
-// 2. Guard Performance
-$guardPerformance = executequery2("
+// 2. Guard Performance - Updated to fetch all metrics
+$guardPerformance = executeQuery2("
+    SELECT 
+        MONTH(pe.evaluation_date) as month_num,
+        DATE_FORMAT(pe.evaluation_date, '%Y-%m') as month_name,
+        AVG(pe.punctuality) as avg_punctuality,
+        AVG(pe.appearance) as avg_appearance,
+        AVG(pe.communication) as avg_communication,
+        AVG(pe.job_knowledge) as avg_job_knowledge,
+        AVG(pe.overall_rating) as avg_overall_rating,
+        COUNT(*) as total_evaluations
+    FROM performance_evaluations pe
+    JOIN guards g ON pe.guard_id = g.id
+    JOIN duty_assignments da ON g.id = da.guard_id
+    JOIN locations l ON da.location_id = l.id
+    WHERE l.organization_id = ? AND pe.evaluation_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    GROUP BY month_num, month_name
+    ORDER BY month_num
+", [$organizationId]) ?: [];
+
+$guardPerformance1 = executequery2("
     SELECT 
         AVG(pe.overall_rating) as avg_rating,
         COUNT(*) as total_evaluations,
@@ -111,36 +130,6 @@ $guardUtilization = executequery2("
 ", [$organizationId, $organizationId, $organizationId]) ?: [];
 
 $utilization = $guardUtilization[0] ?? ['active_guards' => 0, 'total_guards' => 0, 'utilization_rate' => 0];
-
-// Debug output
-echo '<div style="background:#f5f5f5;padding:20px;margin:20px;border:1px solid #ddd;">';
-echo '<h3>Debug Data - Organization ID: '.htmlspecialchars($organizationId).'</h3>';
-
-echo '<h4>$orgrows</h4>';
-echo '<pre>'.print_r($orgRow, true).'</pre>';
-
-echo '<h4>$incidentTrends</h4>';
-echo '<pre>'.print_r($incidentTrends, true).'</pre>';
-
-echo '<h4>$guardPerformance</h4>';
-echo '<pre>'.print_r($guardPerformance, true).'</pre>';
-
-echo '<h4>$attendanceStats</h4>';
-echo '<pre>'.print_r($attendanceStats, true).'</pre>';
-
-echo '<h4>$locationIncidents</h4>';
-echo '<pre>'.print_r($locationIncidents, true).'</pre>';
-
-echo '<h4>$responseTimeData</h4>';
-echo '<pre>'.print_r($responseTimeData, true).'</pre>';
-
-echo '<h4>$guardUtilization</h4>';
-echo '<pre>'.print_r($guardUtilization, true).'</pre>';
-
-echo '<h4>$utilization</h4>';
-echo '<pre>'.print_r($utilization, true).'</pre>';
-
-echo '</div>';
 ?>
 
 <!DOCTYPE html>
@@ -185,7 +174,7 @@ echo '</div>';
                             <i data-lucide="trending-up"></i>
                         </div>
                         <div class="stat-details">
-                            <h3><?php echo !empty($guardPerformance) ? round(array_sum(array_column($guardPerformance, 'avg_rating')) / count($guardPerformance), 1) : 'N/A'; ?></h3>
+                            <h3><?php echo !empty($guardPerformance1) ? round(array_sum(array_column($guardPerformance1, 'avg_rating')) / count($guardPerformance1), 1) : 'N/A'; ?></h3>
                             <p>Avg Performance</p>
                         </div>
                     </div>
@@ -282,7 +271,7 @@ echo '</div>';
                                     if (is_array($locationIncidents) && !empty($locationIncidents)) {
                                         foreach ($locationIncidents as $location): 
                                             // Ensure we have valid data before trying to access array elements
-                                            $locationName = isset($location['name']) ? sanitize($location['name']) : 'Unknown Location';
+                                            $locationName = isset($location['location_name']) ? sanitize($location['location_name']) : 'Unknown Location';
                                             $incidentCount = isset($location['incident_count']) ? (int)$location['incident_count'] : 0;
                                             ?>
                                             <tr>
@@ -414,8 +403,9 @@ echo '</div>';
         }
 
         // Attendance Chart
-        const attendanceData = safeParse(<?php echo json_encode($attendanceStats); ?>);
-        const attendanceCtx = document.getElementById('attendanceChart')?.getContext('2d');
+        const attendanceDataRaw = '<?php echo json_encode($attendanceStats); ?>';
+        const attendanceData = safeParse(attendanceDataRaw);
+        const attendanceCtx = document.getElementById('attendanceChart')?.getContext('2d')
         
         if (attendanceCtx) {
             const statusLabels = safeGet(attendanceData, 'status', 'unknown').map(
@@ -446,25 +436,50 @@ echo '</div>';
         }
 
         // Performance Chart
-        const performanceData = safeParse(<?php echo json_encode($guardPerformance); ?>);
+        const performanceDataRaw = '<?php echo json_encode($guardPerformance, JSON_NUMERIC_CHECK); ?>';
+        const performanceData = safeParse(performanceDataRaw);
         const performanceCtx = document.getElementById('performanceChart')?.getContext('2d');
-        
-        if (performanceCtx) {
-            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            const months = safeGet(performanceData, 'month', 1).map(m => monthNames[m-1] || `Month ${m}`);
-            const ratings = safeGet(performanceData, 'avg_rating', 0);
+
+        if (performanceCtx && performanceData.length) {
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            
+            // Create dataset for each rating type
+            const datasets = [
+                {
+                    label: 'Punctuality',
+                    data: performanceData.map(d => d.avg_punctuality),
+                    backgroundColor: '#FF6384'
+                },
+                {
+                    label: 'Appearance',
+                    data: performanceData.map(d => d.avg_appearance),
+                    backgroundColor: '#36A2EB'
+                },
+                {
+                    label: 'Communication',
+                    data: performanceData.map(d => d.avg_communication),
+                    backgroundColor: '#FFCE56'
+                },
+                {
+                    label: 'Job Knowledge',
+                    data: performanceData.map(d => d.avg_job_knowledge),
+                    backgroundColor: '#4BC0C0'
+                },
+                {
+                    label: 'Overall Rating',
+                    data: performanceData.map(d => d.avg_overall_rating),
+                    backgroundColor: '#9966FF',
+                    borderColor: '#663399',
+                    borderWidth: 2
+                }
+            ];
 
             new Chart(performanceCtx, {
                 type: 'bar',
                 data: {
-                    labels: months,
-                    datasets: [{
-                        label: 'Average Rating',
-                        data: ratings,
-                        backgroundColor: '#0288d1',
-                        borderColor: '#01579b',
-                        borderWidth: 1
-                    }]
+                    labels: performanceData.map(d => monthNames[d.month_num-1] || d.month_name),
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
@@ -477,14 +492,22 @@ echo '</div>';
                                 display: true,
                                 text: 'Rating (1-5)'
                             }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Month'
+                            }
                         }
                     }
                 }
             });
+        } else {
+            console.error('Performance chart data:', performanceData);
         }
-
         // Response Time Chart
-        const responseData = safeParse(<?php echo json_encode($responseTimeData); ?>);
+        const responseDataRaw = '<?php echo json_encode($responseTimeData); ?>';
+        const responseData = safeParse(responseDataRaw);
         const responseCtx = document.getElementById('responseTimeChart')?.getContext('2d');
         
         if (responseCtx) {
