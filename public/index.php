@@ -747,12 +747,12 @@
                 <form id="contactForm" action="contact_submit.php" method="POST">
                     <div class="form-group">
                         <label for="name">Your Name</label>
-                        <input type="text" id="name" name="name" class="form-control" required placeholder="John Doe">
+                        <input type="text" id="name" name="name" class="form-control" required placeholder="Your Full Name">
                     </div>
 
                     <div class="form-group">
                         <label for="email">Your Email</label>
-                        <input type="email" id="email" name="email" class="form-control" required placeholder="john@example.com">
+                        <input type="email" id="email" name="email" class="form-control" required placeholder="Your Email">
                     </div>
 
                     <div class="form-group">
