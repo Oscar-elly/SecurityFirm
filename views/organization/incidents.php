@@ -19,8 +19,13 @@ if (!$organization) {
 // Initialize incidents array
 $incidents = [];
 
-// Get all incidents at this organization's locations
-$query = "SELECT i.*, l.name as location_name, u.name as reporter_name, u.role as reporter_role
+// Get all incidents at this organization's locations - UPDATED QUERY
+$query = "SELECT 
+            i.id, i.title, i.description, i.incident_time, 
+            i.severity, i.status, i.latitude, i.longitude,
+            i.created_at, i.updated_at,
+            l.name as location_name, 
+            u.name as reporter_name, u.role as reporter_role
           FROM incidents i 
           JOIN locations l ON i.location_id = l.id 
           JOIN users u ON i.reported_by = u.id 
@@ -30,6 +35,9 @@ $result = executeQuery($query, [$organization['id']]);
 
 if ($result !== false) {
     $incidents = $result;
+    error_log("Incidents fetched: " . count($incidents)); // Debug log
+} else {
+    error_log("Failed to fetch incidents: " . print_r($conn->error, true)); // Error log
 }
 
 // Get incident statistics
@@ -49,6 +57,9 @@ foreach ($incidents as $incident) {
         $criticalIncidents++;
     }
 }
+
+// Debug output
+error_log("Incident Stats - Total: $totalIncidents, Open: $openIncidents, Resolved: $resolvedIncidents, Critical: $criticalIncidents");
 ?>
 
 <!DOCTYPE html>

@@ -28,22 +28,34 @@ $organizationId = filter_var($_SESSION['user_id'], FILTER_VALIDATE_INT);
 if ($organizationId === false || $organizationId <= 0) {
     die("Invalid user ID");
 }
+$organization = executeQuery2("SELECT id FROM organizations WHERE user_id = ?", [$_SESSION['user_id']], ['single' => true]);
+
+if (!$organization || !isset($organization['id'])) {
+    die("Organization not found for this user.");
+}
+
+$organizationId = $organization['id'];
+
 
 // Fetch risk assessment data with error handling
 try {
-    $riskData = executeQuery("
-        SELECT severity, COUNT(*) as count
-        FROM incidents
-        WHERE user_id = ?
-        GROUP BY severity
-        ORDER BY FIELD(severity, 'critical', 'high', 'medium', 'low')
+// Fetch risk assessment data by severity
+    $riskData = executeQuery2("
+        SELECT i.severity, COUNT(*) as count
+        FROM incidents i
+        JOIN locations l ON i.location_id = l.id
+        JOIN organizations o ON l.organization_id = o.id
+        WHERE o.id = ?
+        GROUP BY i.severity
+        ORDER BY FIELD(i.severity, 'critical', 'high', 'medium', 'low')
     ", [$organizationId]) ?: [];
 
-    $locationsAtRisk = executeQuery("
+    // Fetch locations with most incidents
+    $locationsAtRisk = executeQuery2("
         SELECT l.name as location_name, COUNT(i.id) as incident_count
         FROM locations l
         LEFT JOIN incidents i ON l.id = i.location_id
-        WHERE l.user_id = ?
+        WHERE l.organization_id = ?
         GROUP BY l.id, l.name
         HAVING incident_count > 0
         ORDER BY incident_count DESC
@@ -102,7 +114,7 @@ try {
                         <?php if (!empty($riskData)): ?>
                         <ul class="risk-list">
                             <?php foreach ($riskData as $risk): ?>
-                            <li>
+                            <li class="<?php echo htmlspecialchars(strtolower($risk['severity'])); ?>">
                                 <span class="badge badge-<?php echo htmlspecialchars(strtolower($risk['severity'])); ?>">
                                     <?php echo htmlspecialchars(ucfirst($risk['severity'])); ?>
                                 </span>
@@ -164,6 +176,22 @@ try {
         display: flex;
         justify-content: space-between;
         align-items: center;
+    }
+    .risk-list li.critical {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .risk-list li.high {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    .risk-list li.medium {
+        background-color: #fff8e1;
+        color: #665c00;
+    }
+    .risk-list li.low {
+        background-color: #d4edda;
+        color: #155724;
     }
     </style>
 
