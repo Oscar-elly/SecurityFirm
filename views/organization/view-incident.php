@@ -4,7 +4,7 @@ require_once '../../includes/config.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/db.php';
 
-requireRole('guard');
+requireRole('organization');
 
 $incident_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
@@ -13,15 +13,24 @@ if (!$incident_id) {
     redirect('incidents.php');
 }
 
-// Get incident details
+// Get organization ID for the current user
+$org_query = "SELECT id FROM organizations WHERE user_id = ?";
+$organization = executeQuery($org_query, [$_SESSION['user_id']], ['single' => true]);
+
+if (!$organization) {
+    $_SESSION['error'] = 'Organization not found';
+    redirect('incidents.php');
+}
+
+// Get incident details - updated to check organization access
 $query = "SELECT i.*, l.name as location_name, l.address as location_address,
                  o.name as organization_name, u.name as reporter_name
           FROM incidents i 
           JOIN locations l ON i.location_id = l.id 
           JOIN organizations o ON l.organization_id = o.id 
           JOIN users u ON i.reported_by = u.id 
-          WHERE i.id = ? AND i.reported_by = ?";
-$incident = executeQuery($query, [$incident_id, $_SESSION['user_id']], ['single' => true]);
+          WHERE i.id = ? AND l.organization_id = ?";
+$incident = executeQuery($query, [$incident_id, $organization['id']], ['single' => true]);
 
 if (!$incident) {
     $_SESSION['error'] = 'Incident not found or you do not have access to it';
@@ -47,7 +56,7 @@ $media = executeQuery($query, [$incident_id]);
 </head>
 <body>
     <div class="dashboard-container">
-        <?php include '../includes/guard-sidebar.php'; ?>
+        <?php include '../includes/organization-sidebar.php'; ?>
         
         <main class="main-content">
             <?php include '../includes/top-nav.php'; ?>
@@ -108,10 +117,10 @@ $media = executeQuery($query, [$incident_id]);
                             <div class="detail-section">
                                 <h3>Location Details</h3>
                                 <div class="detail-grid">
-                                    <div class="detail-item">
+                                    <!-- <div class="detail-item">
                                         <label>Organization:</label>
                                         <span><?php echo sanitize($incident['organization_name']); ?></span>
-                                    </div>
+                                    </div> -->
                                     
                                     <div class="detail-item">
                                         <label>Location:</label>

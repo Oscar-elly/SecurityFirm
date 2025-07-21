@@ -81,7 +81,7 @@ try {
         JOIN locations l ON i.location_id = l.id
         WHERE l.organization_id = ?";
     
-    $result = executeQuery2($incidentStatsQuery, [$organizationId], ['single' => true]);
+    $result = executeQuery($incidentStatsQuery, [$organizationId], ['single' => true]);
     if ($result) {
         $stats['incidents'] = array_merge($stats['incidents'], $result);
     }
@@ -94,7 +94,7 @@ try {
         JOIN users u ON g.user_id = u.id
         WHERE g.organization_id = ?";
     
-    $result = executeQuery2($guardStatsQuery, [$organizationId], ['single' => true]);
+    $result = executeQuery($guardStatsQuery, [$organizationId], ['single' => true]);
     if ($result) {
         $stats['guards'] = array_merge($stats['guards'], $result);
     }
@@ -106,7 +106,7 @@ try {
         JOIN guards g ON pe.guard_id = g.id
         WHERE g.organization_id = ?";
     
-    $result = executeQuery2($guardPerformanceQuery, [$organizationId], ['single' => true]);
+    $result = executeQuery($guardPerformanceQuery, [$organizationId], ['single' => true]);
     if ($result && $result['avg_rating'] !== null) {
         $stats['guards']['avg_rating'] = $result['avg_rating'];
     }
@@ -120,7 +120,7 @@ try {
         FROM guard_requests 
         WHERE organization_id = ?";
     
-    $result = executeQuery2($guardRequestsQuery, [$organizationId], ['single' => true]);
+    $result = executeQuery($guardRequestsQuery, [$organizationId], ['single' => true]);
     if ($result) {
         $stats['requests'] = array_merge($stats['requests'], $result);
     }
@@ -134,7 +134,7 @@ try {
         GROUP BY severity
         ORDER BY FIELD(severity, 'critical', 'high', 'medium', 'low')";
     
-    $riskData = executeQuery2($riskDataQuery, [$organizationId]);
+    $riskData = executeQuery($riskDataQuery, [$organizationId]);
 
     // 6. Locations at Risk
     $locationsQuery = "SELECT 
@@ -148,7 +148,7 @@ try {
         ORDER BY incident_count DESC
         LIMIT 5";
     
-    $locationsAtRisk = executeQuery2($locationsQuery, [$organizationId]);
+    $locationsAtRisk = executeQuery($locationsQuery, [$organizationId]);
 
     // 7. Guard Utilization - Fixed and simplified
     $utilizationQuery = "SELECT 
@@ -165,7 +165,7 @@ try {
         AND da.status = 'active'
         AND CURDATE() BETWEEN da.start_date AND IFNULL(da.end_date, CURDATE())";
 
-    $utilizationResult = executeQuery2($utilizationQuery, [
+    $utilizationResult = executeQuery($utilizationQuery, [
         $organizationId, 
         $organizationId, 
         $organizationId, 
@@ -195,7 +195,7 @@ try {
         AND a.check_in_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         GROUP BY status";
     
-    $attendanceResults = executeQuery2($attendanceQuery, [$organizationId, $organizationId]);
+    $attendanceResults = executeQuery($attendanceQuery, [$organizationId, $organizationId]);
     if ($attendanceResults !== false) {
         foreach ($attendanceResults as $row) {
             if ($row['status'] === 'present') {
@@ -217,7 +217,7 @@ try {
         ORDER BY i.incident_time DESC
         LIMIT 5";
     
-    $recentReports = executeQuery2($recentReportsQuery, [$organizationId]);
+    $recentReports = executeQuery($recentReportsQuery, [$organizationId]);
 
 } catch (Exception $e) {
     error_log("EXCEPTION CAUGHT:");

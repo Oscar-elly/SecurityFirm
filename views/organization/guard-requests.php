@@ -168,10 +168,10 @@ $requests = executeQuery($query, [$organization['id']]);
                                     
                                     <div class="request-footer">
                                         <div class="request-actions">
-                                            <button class="btn btn-sm btn-outline" onclick="viewRequest(<?php echo $request['id']; ?>)">
+                                            <!-- <button class="btn btn-sm btn-outline" onclick="viewRequest(<?php echo $request['id']; ?>)">
                                                 <i data-lucide="eye"></i> View Details
                                             </button>
-                                            
+                                             -->
                                             <?php if ($request['status'] === 'pending'): ?>
                                             <button class="btn btn-sm btn-warning" onclick="editRequest(<?php echo $request['id']; ?>)">
                                                 <i data-lucide="edit"></i> Edit

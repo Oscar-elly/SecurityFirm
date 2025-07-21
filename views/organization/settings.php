@@ -18,8 +18,8 @@ $currentOrganization = executeQuery($query, [$userId], ['single' => true]);
 if (!$currentOrganization) {
     $currentOrganization = [
         'name' => '',
-        'email' => '',
-        'phone' => ''
+        'contact_person' => '',
+        'contact_phone' => ''
     ];
 }
 
@@ -29,11 +29,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         switch ($_POST['action']) {
             case 'update_profile':
                 $name = sanitize($_POST['name'] ?? '');
-                $email = sanitize($_POST['email'] ?? '');
-                $phone = sanitize($_POST['phone'] ?? '');
+                $contact_person = sanitize($_POST['contact_person'] ?? '');
+                $contact_phone = sanitize($_POST['contact_phone'] ?? '');
                 
-                $query = "UPDATE organizations SET name = ?, email = ?, phone = ? WHERE user_id = ?";
-                $result = executeQuery($query, [$name, $email, $phone, $userId]);
+                $query = "UPDATE organizations SET name = ?, contact_person = ?, contact_phone = ? WHERE user_id = ?";
+                $result = executeQuery($query, [$name, $contact_person, $contact_phone, $userId]);
                 
                 if ($result) {
                     $_SESSION['success'] = 'Profile updated successfully';
@@ -78,9 +78,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get system statistics with proper error handling
 $systemStats = [
-    'total_guards' => executeQuery("SELECT COUNT(*) as count FROM guards WHERE user_id = ?", [$userId], ['single' => true])['count'] ?? 0,
-    'total_incidents' => executeQuery("SELECT COUNT(*) as count FROM incidents WHERE user_id = ?", [$userId], ['single' => true])['count'] ?? 0,
-    'total_locations' => executeQuery("SELECT COUNT(*) as count FROM locations WHERE user_id = ?", [$userId], ['single' => true])['count'] ?? 0,
+    'total_guards' => executeQuery("SELECT COUNT(*) as count FROM guards WHERE organization_id = ?", [$currentOrganization['id'] ?? 0], ['single' => true])['count'] ?? 0,
+    'total_incidents' => executeQuery("SELECT COUNT(*) as count FROM incidents i JOIN locations l ON i.location_id = l.id WHERE l.organization_id = ?", [$currentOrganization['id'] ?? 0], ['single' => true])['count'] ?? 0,
+    'total_locations' => executeQuery("SELECT COUNT(*) as count FROM locations WHERE organization_id = ?", [$currentOrganization['id'] ?? 0], ['single' => true])['count'] ?? 0,
 ];
 ?>
 
@@ -123,7 +123,7 @@ $systemStats = [
                                 <i data-lucide="user"></i>
                                 <div>
                                     <strong>Organization Name</strong>
-                                    <p><?php echo htmlspecialchars($currentUser['name'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <p><?php echo htmlspecialchars($currentOrganization['name'] ?? 'Not set', ENT_QUOTES, 'UTF-8'); ?></p>
                                 </div>
                             </div>
                             
@@ -131,15 +131,23 @@ $systemStats = [
                                 <i data-lucide="mail"></i>
                                 <div>
                                     <strong>Email Address</strong>
-                                    <p><?php echo htmlspecialchars($currentUser['email'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <p><?php echo htmlspecialchars($currentUser['email'] ?? '', ENT_QUOTES, 'UTF-8'); ?></p>
                                 </div>
                             </div>
                             
                             <div class="info-item">
                                 <i data-lucide="phone"></i>
                                 <div>
-                                    <strong>Phone Number</strong>
-                                    <p><?php echo htmlspecialchars($currentUser['phone'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <strong>Contact Person</strong>
+                                    <p><?php echo htmlspecialchars($currentOrganization['contact_person'] ?? 'Not set', ENT_QUOTES, 'UTF-8'); ?></p>
+                                </div>
+                            </div>
+                            
+                            <div class="info-item">
+                                <i data-lucide="phone-call"></i>
+                                <div>
+                                    <strong>Contact Phone</strong>
+                                    <p><?php echo htmlspecialchars($currentOrganization['contact_phone'] ?? 'Not set', ENT_QUOTES, 'UTF-8'); ?></p>
                                 </div>
                             </div>
                             
@@ -147,7 +155,7 @@ $systemStats = [
                                 <i data-lucide="shield"></i>
                                 <div>
                                     <strong>Account Type</strong>
-                                    <p><?php echo htmlspecialchars(ucfirst($currentUser['role']), ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <p><?php echo htmlspecialchars(ucfirst($currentUser['role'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
                                 </div>
                             </div>
                             
@@ -155,7 +163,7 @@ $systemStats = [
                                 <i data-lucide="calendar"></i>
                                 <div>
                                     <strong>Account Created</strong>
-                                    <p><?php echo htmlspecialchars(formatDate($currentUser['created_at'], 'd M Y'), ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <p><?php echo htmlspecialchars(formatDate($currentUser['created_at'] ?? '', 'd M Y'), ENT_QUOTES, 'UTF-8'); ?></p>
                                 </div>
                             </div>
                             
@@ -164,8 +172,8 @@ $systemStats = [
                                 <div>
                                     <strong>Status</strong>
                                     <p>
-                                        <span class="badge badge-<?php echo $currentUser['status'] === 'active' ? 'success' : 'danger'; ?>">
-                                            <?php echo htmlspecialchars(ucfirst($currentUser['status']), ENT_QUOTES, 'UTF-8'); ?>
+                                        <span class="badge badge-<?php echo ($currentUser['status'] ?? '') === 'active' ? 'success' : 'danger'; ?>">
+                                            <?php echo htmlspecialchars(ucfirst($currentUser['status'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                                         </span>
                                     </p>
                                 </div>
@@ -175,9 +183,9 @@ $systemStats = [
                 </div>
                 
                 <!-- Profile Settings -->
-                <!-- <div class="card">
+                <div class="card">
                     <div class="card-header">
-                        <h2>Profile Settings</h2>
+                        <h2>Organization Profile</h2>
                     </div>
                     <div class="card-body">
                         <form method="POST">
@@ -186,17 +194,17 @@ $systemStats = [
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="name">Organization Name</label>
-                                    <input type="text" id="name" name="name" value="<?php echo isset($currentUser['name']) ? sanitize($currentUser['name']) : ''; ?>" required />
+                                    <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($currentOrganization['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required />
                                 </div>
                                 <div class="form-group">
-                                    <label for="email">Email Address</label>
-                                    <input type="email" id="email" name="email" value="<?php echo isset($currentUser['email']) ? sanitize($currentUser['email']) : ''; ?>" required />
+                                    <label for="contact_person">Contact Person</label>
+                                    <input type="text" id="contact_person" name="contact_person" value="<?php echo htmlspecialchars($currentOrganization['contact_person'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required />
                                 </div>
                             </div>
                             
                             <div class="form-group">
-                                <label for="phone">Phone Number</label>
-                                <input type="tel" id="phone" name="phone" value="<?php echo isset($currentUser['phone']) ? sanitize($currentUser['phone']) : ''; ?>" />
+                                <label for="contact_phone">Contact Phone</label>
+                                <input type="tel" id="contact_phone" name="contact_phone" value="<?php echo htmlspecialchars($currentOrganization['contact_phone'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required />
                             </div>
                             
                             <div class="form-actions">
@@ -206,7 +214,7 @@ $systemStats = [
                             </div>
                         </form>
                     </div>
-                </div> -->
+                </div>
                 
                 <!-- Security Settings -->
                 <div class="card">

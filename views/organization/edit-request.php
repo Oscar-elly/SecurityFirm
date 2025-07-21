@@ -16,13 +16,30 @@ if (!$organization) {
     redirect(SITE_URL);
 }
 
-// Get organization locations - updated to use organization_id
+// Get organization locations
 $query = "SELECT * FROM locations WHERE organization_id = ? AND status = 'active'";
 $locations = executeQuery($query, [$organization['id']]);
 
 // Get available shifts
 $query = "SELECT * FROM shifts ORDER BY start_time";
 $shifts = executeQuery($query);
+
+// Check if we're editing an existing request
+$isEdit = false;
+$requestId = $_GET['id'] ?? 0;
+$existingRequest = null;
+
+if ($requestId) {
+    $query = "SELECT * FROM guard_requests WHERE id = ? AND organization_id = ?";
+    $existingRequest = executeQuery($query, [$requestId, $organization['id']], ['single' => true]);
+    
+    if ($existingRequest) {
+        $isEdit = true;
+    } else {
+        $_SESSION['error'] = 'Request not found or you do not have permission to edit it';
+        redirect('guard-requests.php');
+    }
+}
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -33,28 +50,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $end_date = sanitize($_POST['end_date']);
     $reason = sanitize($_POST['reason']);
     
-    // Insert guard request - updated to use organization_id
-    $query = "INSERT INTO guard_requests (organization_id, location_id, number_of_guards, shift_id, start_date, end_date, reason, status) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')";
-    $result = executeQuery($query, [$organization['id'], $location_id, $number_of_guards, $shift_id, $start_date, $end_date, $reason]);
+    if ($isEdit) {
+        // Update existing request
+        $query = "UPDATE guard_requests SET 
+                 location_id = ?, 
+                 number_of_guards = ?, 
+                 shift_id = ?, 
+                 start_date = ?, 
+                 end_date = ?, 
+                 reason = ?,
+                 updated_at = NOW()
+                 WHERE id = ? AND organization_id = ?";
+        
+        $result = executeQuery($query, [
+            $location_id, 
+            $number_of_guards, 
+            $shift_id, 
+            $start_date, 
+            $end_date, 
+            $reason,
+            $requestId,
+            $organization['id']
+        ]);
+        
+        $actionMessage = "updated";
+    } else {
+        // Create new request
+        $query = "INSERT INTO guard_requests 
+                 (organization_id, location_id, number_of_guards, shift_id, start_date, end_date, reason, status) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')";
+        
+        $result = executeQuery($query, [
+            $organization['id'], 
+            $location_id, 
+            $number_of_guards, 
+            $shift_id, 
+            $start_date, 
+            $end_date, 
+            $reason
+        ]);
+        
+        $actionMessage = "submitted";
+        $requestId = $result ? $conn->insert_id : 0;
+    }
     
     if ($result) {
         // Log activity
-        logActivity($userId, "Requested " . $number_of_guards . " guard(s) for location", 'request');
+        logActivity($userId, "{$actionMessage} guard request for {$number_of_guards} guard(s)", 'request');
         
-        // Send notification to admin
-        $adminQuery = "SELECT id FROM users WHERE role = 'admin'";
-        $admins = executeQuery($adminQuery);
-        foreach ($admins as $admin) {
-            $notificationQuery = "INSERT INTO notifications (user_id, title, message, type, link) 
-                                  VALUES (?, ?, ?, 'request', 'views/admin/guard-requests.php')";
-            executeQuery($notificationQuery, [$admin['id'], 'New Guard Request', $organization['name'] . ' requested ' . $number_of_guards . ' guard(s)']);
+        // Send notification to admin if new request
+        if (!$isEdit) {
+            $adminQuery = "SELECT id FROM users WHERE role = 'admin'";
+            $admins = executeQuery($adminQuery);
+            foreach ($admins as $admin) {
+                $notificationQuery = "INSERT INTO notifications 
+                                    (user_id, title, message, type, link) 
+                                    VALUES (?, ?, ?, 'request', 'views/admin/guard-requests.php')";
+                executeQuery($notificationQuery, [
+                    $admin['id'], 
+                    'New Guard Request', 
+                    $organization['name'] . ' requested ' . $number_of_guards . ' guard(s)'
+                ]);
+            }
         }
         
-        $_SESSION['success'] = 'Guard request submitted successfully';
+        $_SESSION['success'] = "Guard request {$actionMessage} successfully";
         redirect('guard-requests.php');
     } else {
-        $_SESSION['error'] = 'Failed to submit guard request';
+        $_SESSION['error'] = "Failed to {$actionMessage} guard request";
     }
 }
 ?>
@@ -64,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Request Security Guards | <?php echo htmlspecialchars(SITE_NAME, ENT_QUOTES, 'UTF-8'); ?></title>
+    <title><?php echo $isEdit ? 'Edit' : 'Request'; ?> Security Guards | <?php echo htmlspecialchars(SITE_NAME, ENT_QUOTES, 'UTF-8'); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../../assets/css/styles.css">
     <link rel="stylesheet" href="../../assets/css/dashboard.css">
@@ -80,8 +143,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <div class="dashboard-content">
                 <div class="dashboard-header">
-                    <h1>Request Security Guards</h1>
-                    <p>Submit a request for additional security personnel</p>
+                    <h1><?php echo $isEdit ? 'Edit' : 'Request'; ?> Security Guards</h1>
+                    <p><?php echo $isEdit ? 'Update your guard request details' : 'Submit a request for additional security personnel'; ?></p>
                 </div>
                 
                 <?php echo flashMessage('error'); ?>
@@ -93,12 +156,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="card-body">
                         <form method="POST" id="guardRequestForm">
+                            <?php if ($isEdit): ?>
+                            <input type="hidden" name="id" value="<?php echo htmlspecialchars($requestId, ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php endif; ?>
+                            
                             <div class="form-group">
                                 <label for="location_id">Location *</label>
                                 <select id="location_id" name="location_id" required>
                                     <option value="">Select Location</option>
                                     <?php foreach ($locations as $location): ?>
-                                    <option value="<?php echo htmlspecialchars($location['id'], ENT_QUOTES, 'UTF-8'); ?>">
+                                    <option value="<?php echo htmlspecialchars($location['id'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        <?php echo ($isEdit && $existingRequest['location_id'] == $location['id']) ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars($location['name'], ENT_QUOTES, 'UTF-8'); ?>
                                     </option>
                                     <?php endforeach; ?>
@@ -112,7 +180,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             <div class="form-group">
                                 <label for="number_of_guards">Number of Guards Required *</label>
-                                <input type="number" id="number_of_guards" name="number_of_guards" min="1" max="10" required>
+                                <input type="number" id="number_of_guards" name="number_of_guards" 
+                                    min="1" max="10" required
+                                    value="<?php echo $isEdit ? htmlspecialchars($existingRequest['number_of_guards'], ENT_QUOTES, 'UTF-8') : ''; ?>">
                                 <small class="form-help">Maximum 10 guards per request</small>
                             </div>
                             
@@ -121,7 +191,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <select id="shift_id" name="shift_id" required>
                                     <option value="">Select Shift</option>
                                     <?php foreach ($shifts as $shift): ?>
-                                    <option value="<?php echo htmlspecialchars($shift['id'], ENT_QUOTES, 'UTF-8'); ?>">
+                                    <option value="<?php echo htmlspecialchars($shift['id'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        <?php echo ($isEdit && $existingRequest['shift_id'] == $shift['id']) ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars($shift['name'], ENT_QUOTES, 'UTF-8') . ' (' . formatTime($shift['start_time']) . ' - ' . formatTime($shift['end_time']) . ')'; ?>
                                     </option>
                                     <?php endforeach; ?>
@@ -130,38 +201,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             <div class="form-group">
                                 <label for="start_date">Start Date *</label>
-                                <input type="date" id="start_date" name="start_date" required min="<?php echo date('Y-m-d'); ?>">
+                                <input type="date" id="start_date" name="start_date" required 
+                                    min="<?php echo date('Y-m-d'); ?>"
+                                    value="<?php echo $isEdit ? htmlspecialchars($existingRequest['start_date'], ENT_QUOTES, 'UTF-8') : ''; ?>">
                             </div>
                             
                             <div class="form-group">
                                 <label for="end_date">End Date (Optional)</label>
-                                <input type="date" id="end_date" name="end_date">
+                                <input type="date" id="end_date" name="end_date"
+                                    value="<?php echo $isEdit ? htmlspecialchars($existingRequest['end_date'], ENT_QUOTES, 'UTF-8') : ''; ?>">
                                 <small class="form-help">Leave empty for ongoing assignment</small>
                             </div>
                             
                             <div class="form-group">
                                 <label for="reason">Reason for Request *</label>
-                                <textarea id="reason" name="reason" required rows="4" placeholder="Please provide details about why you need additional security guards, any specific requirements, or special circumstances"></textarea>
+                                <textarea id="reason" name="reason" required rows="4" 
+                                    placeholder="Please provide details about why you need additional security guards, any specific requirements, or special circumstances"><?php 
+                                    echo $isEdit ? htmlspecialchars($existingRequest['reason'], ENT_QUOTES, 'UTF-8') : ''; 
+                                ?></textarea>
                             </div>
                             
                             <div class="form-group">
                                 <div class="alert alert-info">
-                                    <strong>Note:</strong> Your request will be reviewed by our security management team. 
-                                    You will be notified once the request is approved and guards are assigned.
+                                    <strong>Note:</strong> 
+                                    <?php if ($isEdit): ?>
+                                    Your updated request will be reviewed by our security management team.
+                                    <?php else: ?>
+                                    Your request will be reviewed by our security management team. You will be notified once the request is approved and guards are assigned.
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             
                             <div class="form-actions">
-                                <a href="dashboard.php" class="btn btn-outline">Cancel</a>
+                                <a href="guard-requests.php" class="btn btn-outline">Cancel</a>
                                 <button type="submit" class="btn btn-primary">
-                                    <i data-lucide="send"></i> Submit Request
+                                    <i data-lucide="<?php echo $isEdit ? 'save' : 'send'; ?>"></i> 
+                                    <?php echo $isEdit ? 'Update' : 'Submit'; ?> Request
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
                 
-                <!-- Request Guidelines -->
+                <?php if (!$isEdit): ?>
+                <!-- Request Guidelines (only shown for new requests) -->
                 <div class="card">
                     <div class="card-header">
                         <h2>Request Guidelines</h2>
@@ -210,6 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </main>
     </div>
