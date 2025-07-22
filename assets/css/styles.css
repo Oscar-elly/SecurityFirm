@@ -567,3 +567,9 @@ textarea {
 .slide-in-up {
     animation: slideInUp var(--transition-normal) ease-in-out;
 }
+.time-window {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 0.5rem;
+    font-style: italic;
+}

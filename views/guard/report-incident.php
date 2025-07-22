@@ -74,6 +74,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                   VALUES (?, ?, ?, 'incident', 'views/admin/incidents.php')";
             executeQuery($notificationQuery, [$admin['id'], 'New Incident Reported', $_SESSION['name'] . ' reported: ' . $title]);
         }
+        // Send notification to organization associated with the location
+        $orgQuery = "SELECT o.user_id FROM locations l 
+                    JOIN organizations o ON l.organization_id = o.id 
+                    WHERE l.id = ?";
+        $orgUsers = executeQuery($orgQuery, [$location_id]);
+
+        foreach ($orgUsers as $orgUser) {
+            $notificationQuery = "INSERT INTO notifications (user_id, title, message, type, link) 
+                                VALUES (?, ?, ?, 'incident', 'views/organization/incidents.php')";
+            executeQuery($notificationQuery, [$orgUser['user_id'], 'New Incident at Your Location', 
+                'An incident has been reported at your location: ' . $title]);
+       }
 
         // Send SMS alerts to admins
         $adminIds = array_column($admins, 'id');

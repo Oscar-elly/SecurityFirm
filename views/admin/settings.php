@@ -660,9 +660,4 @@ $systemStats = [
         });
     </script>
 </body>
-<<<<<<< HEAD
 </html>
-
-=======
-</html>
->>>>>>> e01608b833e801a50a96cb8615f011daabc9025b

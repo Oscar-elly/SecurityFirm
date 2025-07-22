@@ -39,6 +39,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
                 
+            case 'update_location':
+                $location_id = (int)$_POST['location_id'];
+                $name = sanitize($_POST['name']);
+                $address = sanitize($_POST['address']);
+                $latitude = filter_input(INPUT_POST, 'latitude', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+                $longitude = filter_input(INPUT_POST, 'longitude', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+                $contact_person = sanitize($_POST['contact_person']);
+                $contact_phone = sanitize($_POST['contact_phone']);
+                $status = sanitize($_POST['status']);
+                
+                $query = "UPDATE locations SET 
+                          name = ?, 
+                          address = ?, 
+                          latitude = ?, 
+                          longitude = ?, 
+                          contact_person = ?, 
+                          contact_phone = ?, 
+                          status = ? 
+                          WHERE id = ? AND organization_id = ?";
+                $result = executeQuery($query, [
+                    $name, $address, $latitude, $longitude, 
+                    $contact_person, $contact_phone, $status, 
+                    $location_id, $organization['id']
+                ]);
+                
+                if ($result) {
+                    $_SESSION['success'] = 'Location updated successfully';
+                } else {
+                    $_SESSION['error'] = 'Failed to update location';
+                }
+                break;
+                
             case 'update_status':
                 $location_id = (int)$_POST['location_id'];
                 $status = sanitize($_POST['status']);
@@ -60,6 +92,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Get all locations for this organization
 $query = "SELECT * FROM locations WHERE organization_id = ? ORDER BY created_at DESC";
 $locations = executeQuery($query, [$organization['id']]);
+
+// Get location details for edit/view if ID is provided
+$locationDetails = null;
+if (isset($_GET['view_id']) || isset($_GET['edit_id'])) {
+    $locationId = isset($_GET['view_id']) ? (int)$_GET['view_id'] : (int)$_GET['edit_id'];
+    $query = "SELECT * FROM locations WHERE id = ? AND organization_id = ?";
+    $locationDetails = executeQuery($query, [$locationId, $organization['id']], ['single' => true]);
+    
+    if (!$locationDetails) {
+        $_SESSION['error'] = 'Location not found or you don\'t have permission';
+        redirect($_SERVER['PHP_SELF']);
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -212,6 +257,144 @@ $locations = executeQuery($query, [$organization['id']]);
         </div>
     </div>
 
+    <!-- View Location Modal -->
+    <?php if (isset($_GET['view_id']) && $locationDetails): ?>
+    <div id="viewLocationModal" class="modal" style="display: flex;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Location Details</h3>
+                <button onclick="closeViewLocationModal()" class="btn btn-sm btn-outline">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="details-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Location Name:</span>
+                        <span class="detail-value"><?php echo sanitize($locationDetails['name']); ?></span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Address:</span>
+                        <span class="detail-value"><?php echo sanitize($locationDetails['address']); ?></span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Coordinates:</span>
+                        <span class="detail-value">
+                            <?php 
+                                echo $locationDetails['latitude'] && $locationDetails['longitude'] 
+                                    ? $locationDetails['latitude'] . ', ' . $locationDetails['longitude'] 
+                                    : 'Not specified';
+                            ?>
+                        </span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Contact Person:</span>
+                        <span class="detail-value"><?php echo sanitize($locationDetails['contact_person']); ?></span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Contact Phone:</span>
+                        <span class="detail-value"><?php echo sanitize($locationDetails['contact_phone']); ?></span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Status:</span>
+                        <span class="detail-value badge badge-<?php echo $locationDetails['status'] === 'active' ? 'success' : 'danger'; ?>">
+                            <?php echo ucfirst($locationDetails['status']); ?>
+                        </span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Created At:</span>
+                        <span class="detail-value"><?php echo date('M j, Y g:i A', strtotime($locationDetails['created_at'])); ?></span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Last Updated:</span>
+                        <span class="detail-value"><?php echo date('M j, Y g:i A', strtotime($locationDetails['updated_at'])); ?></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeViewLocationModal()" class="btn btn-outline">Close</button>
+                <button onclick="editLocation(<?php echo $locationDetails['id']; ?>)" class="btn btn-warning">
+                    <i data-lucide="edit"></i> Edit Location
+                </button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Edit Location Modal -->
+    <?php if (isset($_GET['edit_id']) && $locationDetails): ?>
+    <div id="editLocationModal" class="modal" style="display: flex;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Location</h3>
+                <button onclick="closeEditLocationModal()" class="btn btn-sm btn-outline">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="update_location">
+                <input type="hidden" name="location_id" value="<?php echo $locationDetails['id']; ?>">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit_name">Location Name *</label>
+                        <input type="text" id="edit_name" name="name" required 
+                               value="<?php echo sanitize($locationDetails['name']); ?>"
+                               placeholder="e.g., Main Office, Warehouse A">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_address">Address *</label>
+                        <textarea id="edit_address" name="address" required rows="3"
+                                  placeholder="Full address including city and postal code"><?php echo sanitize($locationDetails['address']); ?></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Coordinates (Optional)</label>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <input type="number" id="edit_latitude" name="latitude" step="any" 
+                                   value="<?php echo $locationDetails['latitude']; ?>"
+                                   placeholder="Latitude">
+                            <input type="number" id="edit_longitude" name="longitude" step="any"
+                                   value="<?php echo $locationDetails['longitude']; ?>"
+                                   placeholder="Longitude">
+                            <button type="button" id="edit_getLocationBtn" class="btn btn-outline">
+                                <i data-lucide="map-pin"></i> Get Current
+                            </button>
+                        </div>
+                        <small class="form-help">Coordinates help with accurate guard tracking and incident reporting</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_person">Contact Person *</label>
+                        <input type="text" id="edit_contact_person" name="contact_person" required
+                               value="<?php echo sanitize($locationDetails['contact_person']); ?>"
+                               placeholder="Site manager or responsible person">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_phone">Contact Phone *</label>
+                        <input type="tel" id="edit_contact_phone" name="contact_phone" required
+                               value="<?php echo sanitize($locationDetails['contact_phone']); ?>"
+                               placeholder="+254-XXX-XXXXXX">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_status">Status *</label>
+                        <select id="edit_status" name="status" required>
+                            <option value="active" <?php echo $locationDetails['status'] === 'active' ? 'selected' : ''; ?>>Active</option>
+                            <option value="inactive" <?php echo $locationDetails['status'] === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" onclick="closeEditLocationModal()" class="btn btn-outline">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <style>
     .modal {
         position: fixed;
@@ -277,6 +460,26 @@ $locations = executeQuery($query, [$organization['id']]);
         font-size: 0.875rem;
         color: #666;
     }
+    
+    .details-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 1rem;
+    }
+    
+    .detail-item {
+        display: contents;
+    }
+    
+    .detail-label {
+        font-weight: 500;
+        color: #555;
+        padding: 0.5rem 0;
+    }
+    
+    .detail-value {
+        padding: 0.5rem 0;
+    }
     </style>
 
     <script>
@@ -291,15 +494,23 @@ $locations = executeQuery($query, [$organization['id']]);
         }
         
         function viewLocation(id) {
-            window.location.href = 'view-location.php?id=' + id;
+            window.location.href = '<?php echo $_SERVER['PHP_SELF']; ?>?view_id=' + id;
+        }
+        
+        function closeViewLocationModal() {
+            window.location.href = '<?php echo $_SERVER['PHP_SELF']; ?>';
         }
         
         function editLocation(id) {
-            window.location.href = 'edit-location.php?id=' + id;
+            window.location.href = '<?php echo $_SERVER['PHP_SELF']; ?>?edit_id=' + id;
         }
         
-        // Get current location
-        document.getElementById('getLocationBtn').addEventListener('click', function() {
+        function closeEditLocationModal() {
+            window.location.href = '<?php echo $_SERVER['PHP_SELF']; ?>';
+        }
+        
+        // Get current location for add modal
+        document.getElementById('getLocationBtn')?.addEventListener('click', function() {
             const btn = this;
             btn.disabled = true;
             btn.innerHTML = '<i data-lucide="loader"></i> Getting...';
@@ -309,6 +520,42 @@ $locations = executeQuery($query, [$organization['id']]);
                     function(position) {
                         document.getElementById('latitude').value = position.coords.latitude.toFixed(6);
                         document.getElementById('longitude').value = position.coords.longitude.toFixed(6);
+                        
+                        btn.disabled = false;
+                        btn.innerHTML = '<i data-lucide="check"></i> Got Location';
+                        lucide.createIcons();
+                        
+                        setTimeout(() => {
+                            btn.innerHTML = '<i data-lucide="map-pin"></i> Get Current';
+                            lucide.createIcons();
+                        }, 2000);
+                    },
+                    function(error) {
+                        alert('Failed to get location: ' + error.message);
+                        btn.disabled = false;
+                        btn.innerHTML = '<i data-lucide="map-pin"></i> Get Current';
+                        lucide.createIcons();
+                    }
+                );
+            } else {
+                alert('Geolocation is not supported by this browser');
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="map-pin"></i> Get Current';
+                lucide.createIcons();
+            }
+        });
+        
+        // Get current location for edit modal
+        document.getElementById('edit_getLocationBtn')?.addEventListener('click', function() {
+            const btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader"></i> Getting...';
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        document.getElementById('edit_latitude').value = position.coords.latitude.toFixed(6);
+                        document.getElementById('edit_longitude').value = position.coords.longitude.toFixed(6);
                         
                         btn.disabled = false;
                         btn.innerHTML = '<i data-lucide="check"></i> Got Location';

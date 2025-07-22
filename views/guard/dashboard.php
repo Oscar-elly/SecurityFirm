@@ -42,7 +42,7 @@ if (!$guard) {
 $guardId = $guard['id'];
 $query = "SELECT da.*, l.name as location_name, l.address as location_address, 
                  l.latitude, l.longitude, s.name as shift_name, s.start_time, s.end_time, 
-                 o.name as organization_name 
+                 o.name as organization_name, o.user_id as organization_admin_id
           FROM duty_assignments da 
           JOIN locations l ON da.location_id = l.id 
           JOIN shifts s ON da.shift_id = s.id 
@@ -103,54 +103,113 @@ $query = "SELECT pe.*, u.name as evaluator_name
 $recentEvaluations = executeQuery($query, [$userId]);
 
 // Handle check-in/check-out form submission
+// Handle check-in/check-out form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && !empty($currentDuty)) {
         $dutyId = $currentDuty[0]['id'];
         $latitude = filter_input(INPUT_POST, 'latitude', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
         $longitude = filter_input(INPUT_POST, 'longitude', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
         $notes = filter_input(INPUT_POST, 'notes', FILTER_SANITIZE_STRING);
+        
+        // Get current time and shift times
+        $now = date('Y-m-d H:i:s');
+        $currentTime = strtotime($now);
+        $shiftStartTime = strtotime(date('Y-m-d') . ' ' . $currentDuty[0]['start_time']);
+        $shiftEndTime = strtotime(date('Y-m-d') . ' ' . $currentDuty[0]['end_time']);
+        
+        // Handle overnight shifts (where end time is next day)
+        if ($shiftEndTime < $shiftStartTime) {
+            $shiftEndTime = strtotime(date('Y-m-d', strtotime('+1 day')) . ' ' . $currentDuty[0]['end_time']);
+        }
+        
+        // Calculate buffer time (15 minutes before/after shift)
+        $bufferTime = 15 * 60; // 15 minutes in seconds
+        $earliestCheckIn = $shiftStartTime - $bufferTime;
+        $latestCheckIn = $shiftStartTime + (60 * 60); // 1 hour after shift start
+        $earliestCheckOut = $shiftEndTime - (60 * 60); // 1 hour before shift end
+        $latestCheckOut = $shiftEndTime + $bufferTime;
 
         if ($_POST['action'] === 'check_in' && empty($todayAttendance)) {
-            $status = 'present';
-            $now = date('Y-m-d H:i:s');
-            $currentTime = strtotime($now);
-            $shiftStartTime = strtotime(date('Y-m-d') . ' ' . $currentDuty[0]['start_time']);
+            // Validate check-in time window
+            if ($currentTime < $earliestCheckIn) {
+                $_SESSION['error'] = 'You cannot check in more than 15 minutes before your shift starts.';
+                redirect($_SERVER['PHP_SELF']);
+            }
+            
+            if ($currentTime > $latestCheckIn) {
+                $_SESSION['error'] = 'You cannot check in more than 1 hour after your shift has started.';
+                redirect($_SERVER['PHP_SELF']);
+            }
 
+            // Determine status (on-time or late)
+            $status = 'present';
             if ($currentTime > $shiftStartTime + (30 * 60)) {
                 $status = 'late';
             }
 
+            // Record check-in
             $query = "INSERT INTO attendance (duty_assignment_id, check_in_time, check_in_latitude, check_in_longitude, status, notes) 
                       VALUES (?, ?, ?, ?, ?, ?)";
             $result = executeQuery($query, [$dutyId, $now, $latitude, $longitude, $status, $notes]);
 
             if ($result) {
                 logActivity($userId, "Checked in for duty at " . $currentDuty[0]['location_name'], 'attendance');
+                
+                // Notification for organization admin
+                $orgAdminLink = "/organization/attendance/view?guard_id=" . $guardId . "&duty_id=" . $dutyId;
                 $notificationTitle = "Guard Check-in";
-                $notificationMessage = $_SESSION['name'] . " checked in for duty at " . $currentDuty[0]['location_name'];
-                $adminQuery = "SELECT id FROM users WHERE role = 'admin'";
+                $notificationMessage = "Guard {$guard['user_name']} (ID: {$guard['id_number']}) has checked in at {$currentDuty[0]['location_name']} for {$currentDuty[0]['shift_name']} shift";
+                
+                $query = "INSERT INTO notifications (user_id, title, message, type, link) 
+                          VALUES (?, ?, ?, 'attendance', ?)";
+                executeQuery($query, [
+                    $currentDuty[0]['organization_admin_id'], 
+                    $notificationTitle, 
+                    $notificationMessage,
+                    $orgAdminLink
+                ]);
+                
+                // Notification for system admins
+                $adminLink = "/admin/attendance/view?guard_id=" . $guardId . "&duty_id=" . $dutyId;
+                $adminQuery = "SELECT id FROM users WHERE role = 'admin' AND status = 'active'";
                 $admins = executeQuery($adminQuery);
+                
                 foreach ($admins as $admin) {
                     $query = "INSERT INTO notifications (user_id, title, message, type, link) 
-                              VALUES (?, ?, ?, 'attendance', 'views/admin/attendance.php')";
-                    executeQuery($query, [$admin['id'], $notificationTitle, $notificationMessage]);
+                              VALUES (?, ?, ?, 'attendance', ?)";
+                    executeQuery($query, [
+                        $admin['id'], 
+                        $notificationTitle, 
+                        $notificationMessage,
+                        $adminLink
+                    ]);
                 }
+                
                 $_SESSION['success'] = 'Check-in successful';
                 redirect($_SERVER['PHP_SELF']);
             } else {
                 $_SESSION['error'] = 'Failed to check-in. Please try again.';
             }
+            
         } elseif ($_POST['action'] === 'check_out' && !empty($todayAttendance) && empty($todayAttendance['check_out_time'])) {
-            $now = date('Y-m-d H:i:s');
-            $currentTime = strtotime($now);
-            $shiftEndTime = strtotime(date('Y-m-d') . ' ' . $currentDuty[0]['end_time']);
-            if (strtotime($currentDuty[0]['start_time']) > strtotime($currentDuty[0]['end_time'])) {
-                $shiftEndTime = strtotime(date('Y-m-d', strtotime('+1 day')) . ' ' . $currentDuty[0]['end_time']);
+            // Validate check-out time window
+            if ($currentTime < $earliestCheckOut) {
+                $_SESSION['error'] = 'You cannot check out more than 1 hour before your shift ends.';
+                redirect($_SERVER['PHP_SELF']);
             }
+            
+            if ($currentTime > $latestCheckOut) {
+                $_SESSION['error'] = 'You cannot check out more than 15 minutes after your shift has ended.';
+                redirect($_SERVER['PHP_SELF']);
+            }
+
+            // Determine status (on-time or early departure)
             $status = $todayAttendance['status'];
             if ($currentTime < $shiftEndTime - (30 * 60)) {
                 $status = 'early_departure';
             }
+            
+            // Record check-out
             $query = "UPDATE attendance SET check_out_time = ?, check_out_latitude = ?, 
                       check_out_longitude = ?, status = ?, notes = CONCAT(IFNULL(notes, ''), '\n', ?) 
                       WHERE id = ?";
@@ -158,15 +217,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($result) {
                 logActivity($userId, "Checked out from duty at " . $currentDuty[0]['location_name'], 'attendance');
+                
+                // Notification for organization admin
+                $orgAdminLink = "/organization/attendance/view?guard_id=" . $guardId . "&duty_id=" . $dutyId;
                 $notificationTitle = "Guard Check-out";
-                $notificationMessage = $_SESSION['name'] . " checked out from duty at " . $currentDuty[0]['location_name'];
-                $adminQuery = "SELECT id FROM users WHERE role = 'admin'";
+                $duration = calculateDuration($todayAttendance['check_in_time'], $now);
+                $notificationMessage = "Guard {$guard['user_name']} (ID: {$guard['id_number']}) has checked out from {$currentDuty[0]['location_name']} after completing {$currentDuty[0]['shift_name']} shift. Duration: $duration";
+                
+                $query = "INSERT INTO notifications (user_id, title, message, type, link) 
+                          VALUES (?, ?, ?, 'attendance', ?)";
+                executeQuery($query, [
+                    $currentDuty[0]['organization_admin_id'], 
+                    $notificationTitle, 
+                    $notificationMessage,
+                    $orgAdminLink
+                ]);
+                
+                // Notification for system admins
+                $adminLink = "/admin/attendance/view?guard_id=" . $guardId . "&duty_id=" . $dutyId;
+                $adminQuery = "SELECT id FROM users WHERE role = 'admin' AND status = 'active'";
                 $admins = executeQuery($adminQuery);
+                
                 foreach ($admins as $admin) {
                     $query = "INSERT INTO notifications (user_id, title, message, type, link) 
-                              VALUES (?, ?, ?, 'attendance', 'views/admin/attendance.php')";
-                    executeQuery($query, [$admin['id'], $notificationTitle, $notificationMessage]);
+                              VALUES (?, ?, ?, 'attendance', ?)";
+                    executeQuery($query, [
+                        $admin['id'], 
+                        $notificationTitle, 
+                        $notificationMessage,
+                        $adminLink
+                    ]);
                 }
+                
                 $_SESSION['success'] = 'Check-out successful';
                 redirect($_SERVER['PHP_SELF']);
             } else {
@@ -247,6 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </div>
                                 
                                 <div class="check-in-out">
+                                    <!-- In the check-in form section -->
                                     <?php if (empty($todayAttendance)): ?>
                                         <!-- Check-in Form -->
                                         <form method="POST" action="" id="check-in-form">
@@ -264,6 +347,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             </button>
                                             
                                             <p class="location-status" id="location-status">Getting your location...</p>
+                                            <?php if (!empty($currentDuty)): ?>
+                                                <?php 
+                                                    $shiftStart = strtotime($currentDuty[0]['start_time']);
+                                                    $earliestCheckIn = date('h:i A', $shiftStart - (15 * 60));
+                                                    $latestCheckIn = date('h:i A', $shiftStart + (60 * 60));
+                                                ?>
+                                                <p class="time-window">You can check in between <?php echo $earliestCheckIn; ?> and <?php echo $latestCheckIn; ?></p>
+                                            <?php endif; ?>
                                         </form>
                                     <?php elseif (empty($todayAttendance['check_out_time'])): ?>
                                         <!-- Check-out Form -->
@@ -282,29 +373,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             </button>
                                             
                                             <p class="location-status" id="location-status">Getting your location...</p>
+                                            <?php if (!empty($currentDuty)): ?>
+                                                <?php 
+                                                    $shiftEnd = strtotime($currentDuty[0]['end_time']);
+                                                    // Handle overnight shifts
+                                                    if (strtotime($currentDuty[0]['start_time']) > $shiftEnd) {
+                                                        $shiftEnd = strtotime(date('Y-m-d', strtotime('+1 day')) . ' ' . $currentDuty[0]['end_time']);
+                                                    }
+                                                    $earliestCheckOut = date('h:i A', $shiftEnd - (60 * 60));
+                                                    $latestCheckOut = date('h:i A', $shiftEnd + (15 * 60));
+                                                ?>
+                                                <p class="time-window">You can check out between <?php echo $earliestCheckOut; ?> and <?php echo $latestCheckOut; ?></p>
+                                            <?php endif; ?>
                                         </form>
-                                        
-                                        <!-- Check-in Details -->
-                                        <div class="check-info">
-                                            <p><strong>Checked In:</strong> <?php echo formatDate($todayAttendance['check_in_time']); ?></p>
-                                            <p><strong>Status:</strong> 
-                                                <span class="badge badge-<?php echo getAttendanceStatusClass($todayAttendance['status']); ?>">
-                                                    <?php echo ucfirst(str_replace('_', ' ', $todayAttendance['status'])); ?>
-                                                </span>
-                                            </p>
-                                        </div>
-                                    <?php else: ?>
-                                        <!-- Checked Out Info -->
-                                        <div class="check-info completed">
-                                            <p><strong>Checked In:</strong> <?php echo formatDate($todayAttendance['check_in_time']); ?></p>
-                                            <p><strong>Checked Out:</strong> <?php echo formatDate($todayAttendance['check_out_time']); ?></p>
-                                            <p><strong>Status:</strong> 
-                                                <span class="badge badge-<?php echo getAttendanceStatusClass($todayAttendance['status']); ?>">
-                                                    <?php echo ucfirst(str_replace('_', ' ', $todayAttendance['status'])); ?>
-                                                </span>
-                                            </p>
-                                            <p><strong>Duration:</strong> <?php echo calculateDuration($todayAttendance['check_in_time'], $todayAttendance['check_out_time']); ?></p>
-                                        </div>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -521,20 +602,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         };
         
         function initMap() {
+            // Create map with strict controls
             map = new google.maps.Map(document.getElementById("map"), {
                 center: dutyLocation,
-                zoom: 15,
+                zoom: 18, // Higher zoom level for precision
                 mapTypeId: "roadmap",
+                disableDefaultUI: true, // Disable default controls
+                gestureHandling: "cooperative", // Require Ctrl+scroll to zoom
+                keyboardShortcuts: false,
+                clickableIcons: false,
+                minZoom: 16, // Prevent zooming out too far
+                maxZoom: 20  // Prevent zooming in too close
             });
             
             // Add marker for duty location
             new google.maps.Marker({
                 position: dutyLocation,
                 map: map,
-                title: "<?php echo addslashes($currentDuty[0]['location_name']); ?>",
+                title: "Duty Location",
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: "#4CAF50",
+                    fillOpacity: 1,
+                    strokeColor: "#FFFFFF",
+                    strokeWeight: 2
+                }
             });
             
-            // Draw circle for allowed check-in/out area (100 meters radius)
+            // Draw precise circle (50m radius)
             new google.maps.Circle({
                 strokeColor: "#4CAF50",
                 strokeOpacity: 0.8,
@@ -543,7 +639,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 fillOpacity: 0.2,
                 map: map,
                 center: dutyLocation,
-                radius: 100, // meters
+                radius: 50, // 50 meters for more precision
+                clickable: false
             });
             
             // Try to get current location
@@ -715,4 +812,3 @@ function calculateDuration($start, $end) {
     
     return $hours . 'h ' . $minutes . 'm';
 }
-?>
